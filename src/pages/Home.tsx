@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { PlayerCard } from "@/components/ui/player-card";
-import { EnhancedPlayerCard } from "@/components/ui/enhanced-player-card";
 import { LiveScoreWidget, NewsFeed } from "@/components/ui/football-features";
 import { SearchAndFilters } from "@/components/ui/search-and-filters";
 import { FeatureFlagWrapper } from "@/components/ui/feature-flag-wrapper";
@@ -21,9 +21,10 @@ import { fetchPlayerByName } from "@/lib/utils";
 import { favoritePlayersNames } from "@/utils/ballonDorPlayers";
 import { useSupabaseTable } from "@/hooks/useSupabaseTable";
 import { realRankingStatic } from "./Ranking";
+import type { Player } from "@/types";
 
 // Données de test pour les joueurs favoris
-const favoritePlayersData = [
+const favoritePlayersData: Player[] = [
   {
     id: "1",
     slug: "kylian-mbappe",
@@ -66,7 +67,7 @@ const favoritePlayersData = [
   }
 ];
 
-function getCountdown(targetDate) {
+function getCountdown(targetDate: Date) {
   const now = new Date();
   const diff = Math.max(0, targetDate.getTime() - now.getTime());
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
@@ -79,8 +80,8 @@ function getCountdown(targetDate) {
 export default function Home() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
-  const [players, setPlayers] = useState<any[]>([]);
-  const [selectedPlayer, setSelectedPlayer] = useState<any>(null);
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [showPlayerDetails, setShowPlayerDetails] = useState(false);
   const [notificationCount, setNotificationCount] = useState(3);
   const [activeFilter, setActiveFilter] = useState("all");
@@ -97,7 +98,7 @@ export default function Home() {
   const handleTop5Vote = (playerName: string) => {
     setTop5Votes(v => ({ ...v, [playerName]: (v[playerName] || 0) + 1 }));
   };
-  const handleTop5ViewDetails = (player: any) => {
+  const handleTop5ViewDetails = (player: Player) => {
     setSelectedPlayer(player);
     setShowPlayerDetails(true);
   };
@@ -199,7 +200,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!loadingPlayers && players.length === 0) {
-      insert(favoritePlayersData);
+      insert(favoritePlayersData).catch(console.error);
     }
   }, [loadingPlayers, players.length, insert]);
 
@@ -207,15 +208,19 @@ export default function Home() {
     setSupabaseStatus('Using localStorage instead of Supabase');
   }, []);
 
-  const handleViewDetails = (player: any) => {
+  const handleViewDetails = (player: Player) => {
     setSelectedPlayer(player);
     setShowPlayerDetails(true);
   };
 
   const handleVote = async (playerId: string) => {
-    const player = playersData.find((p: any) => p.id === playerId);
+    const player = playersData.find((p: Player) => p.id === playerId);
     if (player) {
-      await update(playerId, { votes: (player.votes || 0) + 1 });
+      try {
+        await update(playerId, { votes: (player.votes || 0) + 1 });
+      } catch (error) {
+        console.error('Error voting:', error);
+      }
       toast({
         title: "Vote enregistré !",
         description: `Vous avez voté pour ${player?.name}. Merci pour votre participation !`,
@@ -224,9 +229,13 @@ export default function Home() {
   };
 
   const handleLike = async (playerId: string) => {
-    const player = playersData.find((p: any) => p.id === playerId);
+    const player = playersData.find((p: Player) => p.id === playerId);
     if (player) {
-      await update(playerId, { isLiked: !player.isLiked });
+      try {
+        await update(playerId, { isLiked: !player.isLiked });
+      } catch (error) {
+        console.error('Error liking player:', error);
+      }
       toast({
         title: !player.isLiked ? "Ajouté aux favoris ❤️" : "Retiré des favoris",
         description: `${player?.name} ${!player.isLiked ? 'ajouté à' : 'retiré de'} votre liste de favoris.`,
@@ -265,7 +274,8 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <ErrorBoundary>
+      <div className="min-h-screen bg-background pb-20">
       {supabaseStatus && (
         <div className="p-2 bg-green-100 text-green-800 text-sm rounded mb-2">
           {supabaseStatus}
@@ -412,5 +422,6 @@ export default function Home() {
         onClose={() => setShowSearch(false)}
       />
     </div>
+    </ErrorBoundary>
   );
 }

@@ -2,6 +2,7 @@ import React from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -25,10 +26,22 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error("ErrorBoundary caught an error:", error, errorInfo);
+    
+    // Send error to monitoring service
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'exception', {
+        description: error.message,
+        fatal: false
+      });
+    }
   }
 
   handleReset = () => {
     this.setState({ hasError: false, error: undefined });
+  };
+
+  handleReload = () => {
+    window.location.reload();
   };
 
   render() {
@@ -56,7 +69,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Réessayer
               </Button>
-              <Button onClick={() => window.location.reload()}>
+              <Button onClick={this.handleReload}>
                 Recharger la page
               </Button>
             </div>
@@ -72,11 +85,17 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 // Hook version for functional components
 export const useErrorBoundary = () => {
   const [error, setError] = React.useState<Error | null>(null);
+  const { toast } = useToast();
 
   const resetError = () => setError(null);
 
   React.useEffect(() => {
     if (error) {
+      toast({
+        title: "Une erreur est survenue",
+        description: "L'application va redémarrer automatiquement.",
+        variant: "destructive"
+      });
       throw error;
     }
   }, [error]);

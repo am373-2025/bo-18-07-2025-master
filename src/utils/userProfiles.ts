@@ -1,21 +1,7 @@
-// Système de profils utilisateur via Supabase
+// Système de profils utilisateur avec Supabase + fallback localStorage
 
-export interface UserProfile {
-  id: string;
-  name: string;
-  username: string;
-  bio: string;
-  avatar: string;
-  followers: number;
-  following: number;
-  joinDate: string;
-  favorites: string[];
-  stats: {
-    votes: number;
-    posts: number;
-    likes: number;
-  };
-}
+import { supabase, storage } from "@/lib/supabaseClient";
+import type { UserProfile } from "@/types";
 
 export const createEmptyUserProfile = (userId: string): UserProfile => ({
   id: userId,
@@ -30,35 +16,108 @@ export const createEmptyUserProfile = (userId: string): UserProfile => ({
   stats: {
     votes: 0,
     posts: 0,
-    likes: 0
+    likes: 0,
+    comments: 0
   }
 });
 
-// Helpers asynchrones pour gérer les profils utilisateur dans Supabase
+// Helpers asynchrones pour gérer les profils utilisateur
 export async function getCurrentProfile(): Promise<UserProfile | null> {
-  // Using localStorage instead of Supabase
-  const stored = localStorage.getItem('currentUserProfile');
-  if (stored) {
-    return JSON.parse(stored);
+  try {
+    if (supabase) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+          
+        if (!error && data) {
+          return data as UserProfile;
+        }
+      }
+    }
+    
+    // Fallback to localStorage
+    const stored = storage.get('currentUserProfile', null);
+    if (stored) {
+      return stored;
+    }
+    
+    // Create default profile
+    const defaultProfile = createEmptyUserProfile('user-1');
+    storage.set('currentUserProfile', defaultProfile);
+    return defaultProfile;
+  } catch (error) {
+    console.error('Error getting current profile:', error);
+    return null;
   }
-  // Create default profile
-  const defaultProfile = createEmptyUserProfile('user-1');
-  localStorage.setItem('currentUserProfile', JSON.stringify(defaultProfile));
-  return defaultProfile;
 }
 
 export async function updateCurrentProfile(updates: Partial<UserProfile>): Promise<UserProfile | null> {
-  const current = await getCurrentProfile();
-  if (!current) return null;
-  const updated = { ...current, ...updates };
-  localStorage.setItem('currentUserProfile', JSON.stringify(updated));
-  return updated;
+  try {
+    if (supabase) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .update(updates)
+          .eq('id', user.id)
+          .select()
+          .single();
+          
+        if (!error && data) {
+          return data as UserProfile;
+        }
+      }
+    }
+    
+    // Fallback to localStorage
+    const current = await getCurrentProfile();
+    if (!current) return null;
+    const updated = { ...current, ...updates };
+    storage.set('currentUserProfile', updated);
+    return updated;
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    return null;
+  }
 }
 
-export async function createNewUser(): Promise<UserProfile | null> {
-  const emptyProfile = createEmptyUserProfile('user-1');
-  localStorage.setItem('currentUserProfile', JSON.stringify(emptyProfile));
-  return emptyProfile;
+export async function createOrUpdateUserProfile(fields: Partial<UserProfile>): Promise<UserProfile | null> {
+  const current = await getCurrentProfile();
+  
+  if (current) {
+    return updateCurrentProfile(fields);
+  } else {
+    return createNewUser(fields);
+  }
+}
+
+export async function createNewUser(fields: Partial<UserProfile> = {}): Promise<UserProfile | null> {
+  try {
+    const profile = { ...createEmptyUserProfile('user-1'), ...fields };
+    
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .insert([profile])
+        .select()
+        .single();
+        
+      if (!error && data) {
+        return data as UserProfile;
+      }
+    }
+    
+    // Fallback to localStorage
+    storage.set('currentUserProfile', profile);
+    return profile;
+  } catch (error) {
+    console.error('Error creating user profile:', error);
+    return null;
+  }
 }
 
 export async function switchUser(userId: string): Promise<UserProfile | null> {

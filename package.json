@@ -9,10 +9,13 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "jest --passWithNoTests",
+    "test": "vitest",
     "test:watch": "jest --watchAll",
     "test:coverage": "jest --coverage",
-    "backup": "git add . && git commit -m \"backup auto\" && git push"
+    "backup": "git add . && git commit -m \"backup auto\" && git push",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist node_modules/.vite",
+    "start:prod": "npm run build && npm run preview"
   },
   "jest": {
     "preset": "ts-jest",
@@ -62,6 +65,7 @@
     "cmdk": "^1.0.0",
     "cors": "^2.8.5",
     "date-fns": "^3.6.0",
+    "dotenv": "^17.2.0",
     "embla-carousel-react": "^8.3.0",
     "express": "^5.1.0",
     "framer-motion": "^12.23.3",
