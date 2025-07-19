@@ -127,13 +127,6 @@ export async function switchUser(userId: string): Promise<UserProfile | null> {
   return profile;
 }
 
-export async function createOrUpdateUserProfile(fields: Partial<UserProfile>): Promise<UserProfile | null> {
-  const current = await getCurrentProfile();
-  const profile = current ? { ...current, ...fields } : { ...createEmptyUserProfile('user-1'), ...fields };
-  localStorage.setItem('currentUserProfile', JSON.stringify(profile));
-  return profile;
-}
-
 // --- Votes ---
 export async function addVote(player_id: string) {
   const votes = JSON.parse(localStorage.getItem('userVotes') || '[]');

@@ -3,11 +3,24 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseKey) {
+// Check if URLs are valid and not empty strings
+const isValidUrl = (url: string): boolean => {
+  if (!url || url.trim() === '') return false;
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const isValidSupabaseConfig = isValidUrl(supabaseUrl) && supabaseKey && supabaseKey.trim() !== '';
+
+if (!isValidSupabaseConfig) {
   console.warn('Supabase configuration missing. Using localStorage fallback.');
 }
 
-export const supabase = supabaseUrl && supabaseKey 
+export const supabase = isValidSupabaseConfig 
   ? createClient(supabaseUrl, supabaseKey)
   : null;
 
