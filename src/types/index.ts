@@ -8,7 +8,7 @@ export interface Player {
   club: string;
   photo: string;
   votes: number;
-  isLiked: boolean;
+  isLiked?: boolean;
   stats?: PlayerStats;
   country?: string;
   age?: number;
