@@ -440,7 +440,7 @@ export default function Club() {
     setShowCreatePost(true);
   };
 
-  const updatePost = async () => {
+  const handleUpdatePost = async () => {
     if (!isAuthenticated) {
       setShowLoginModal(true);
       return;
@@ -791,7 +791,7 @@ export default function Club() {
                 </Button>
                 <Button
                   className="flex-1 btn-golden"
-                  onClick={editingPost ? updatePost : handleCreatePost}
+                  onClick={editingPost ? handleUpdatePost : handleCreatePost}
                   disabled={!newPost.trim()}
                 >
                   {editingPost ? "Mettre à jour" : "Publier"}
