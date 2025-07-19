@@ -84,9 +84,13 @@ export const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
         description: "Bienvenue dans l'application !",
       });
     } catch (error: any) {
+      let errorMessage = "Une erreur est survenue lors de la connexion.";
+      if (error.message.includes('Invalid login credentials') || error.message.includes('incorrect')) {
+        errorMessage = "Email ou mot de passe incorrect. Vérifiez vos identifiants ou créez un compte.";
+      }
       toast({
         title: "Erreur de connexion",
-        description: error.message || "Une erreur est survenue lors de la connexion.",
+        description: errorMessage,
         variant: "destructive"
       });
     }

@@ -92,7 +92,14 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [supabaseStatus, setSupabaseStatus] = useState<string>("");
-  const { data: playersData, loading: loadingPlayers, insert, update, usingLocalStorage } = useSupabaseTable('players', undefined, 'id, slug, name, position, club, photo, votes, country, age, ranking, trend, created_at, updated_at');
+  const {
+    data: playersData,
+    loading,
+    error,
+    insert,
+    update,
+    usingLocalStorage
+  } = useSupabaseTable<Player>('players', 'id, slug, name, position, club, photo, votes, country, age, ranking, trend, created_at, updated_at');
   const top5Ranking = realRankingStatic.slice(0, 5);
 
   // Handlers pour le top 5 (pas de like, vote local)

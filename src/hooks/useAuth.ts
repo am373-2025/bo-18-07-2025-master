@@ -57,6 +57,11 @@ export const useAuth = () => {
     try {
       const { data, error } = await signIn(email, password);
       if (error) {
+        // Handle specific authentication errors
+        if (error.message.includes('Invalid login credentials')) {
+          setState(prev => ({ ...prev, error: 'Email ou mot de passe incorrect', loading: false }));
+          return { data: null, error: { message: 'Email ou mot de passe incorrect' } };
+        }
         setState(prev => ({ ...prev, error: error.message, loading: false }));
       }
       return { data, error };
