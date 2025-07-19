@@ -90,7 +90,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [supabaseStatus, setSupabaseStatus] = useState<string>("");
-  const { data: playersData, loading: loadingPlayers, insert, update } = useSupabaseTable('players');
+  const { data: playersData, loading: loadingPlayers, insert, update, usingLocalStorage } = useSupabaseTable('players');
   const top5Ranking = realRankingStatic.slice(0, 5);
 
   // Handlers pour le top 5 (pas de like, vote local)
@@ -199,13 +199,17 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!loadingPlayers && players.length === 0) {
+    if (!loadingPlayers && playersData.length === 0) {
       insert(favoritePlayersData).catch(console.error);
     }
-  }, [loadingPlayers, players.length, insert]);
+  }, [loadingPlayers, playersData.length, insert]);
 
   useEffect(() => {
-    setSupabaseStatus('Using localStorage instead of Supabase');
+    if (usingLocalStorage) {
+      setSupabaseStatus('Using localStorage fallback (Supabase table not available)');
+    } else {
+      setSupabaseStatus('Connected to Supabase database');
+    }
   }, []);
 
   const handleViewDetails = (player: Player) => {
@@ -218,13 +222,18 @@ export default function Home() {
     if (player) {
       try {
         await update(playerId, { votes: (player.votes || 0) + 1 });
+        toast({
+          title: "Vote enregistré !",
+          description: `Vous avez voté pour ${player?.name}. Merci pour votre participation !`,
+        });
       } catch (error) {
         console.error('Error voting:', error);
+        toast({
+          title: "Erreur",
+          description: "Impossible d'enregistrer votre vote. Veuillez réessayer.",
+          variant: "destructive",
+        });
       }
-      toast({
-        title: "Vote enregistré !",
-        description: `Vous avez voté pour ${player?.name}. Merci pour votre participation !`,
-      });
     }
   };
 
@@ -233,13 +242,18 @@ export default function Home() {
     if (player) {
       try {
         await update(playerId, { isLiked: !player.isLiked });
+        toast({
+          title: !player.isLiked ? "Ajouté aux favoris ❤️" : "Retiré des favoris",
+          description: `${player?.name} ${!player.isLiked ? 'ajouté à' : 'retiré de'} votre liste de favoris.`,
+        });
       } catch (error) {
         console.error('Error liking player:', error);
+        toast({
+          title: "Erreur",
+          description: "Impossible de mettre à jour vos favoris. Veuillez réessayer.",
+          variant: "destructive",
+        });
       }
-      toast({
-        title: !player.isLiked ? "Ajouté aux favoris ❤️" : "Retiré des favoris",
-        description: `${player?.name} ${!player.isLiked ? 'ajouté à' : 'retiré de'} votre liste de favoris.`,
-      });
     }
   };
 
