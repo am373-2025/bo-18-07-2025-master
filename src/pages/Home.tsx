@@ -94,8 +94,8 @@ export default function Home() {
   const [supabaseStatus, setSupabaseStatus] = useState<string>("");
   const {
     data: playersData,
-    loading,
-    error,
+    loading: loadingSupabaseTable,
+    error: errorSupabaseTable,
     insert,
     update,
     usingLocalStorage
@@ -208,10 +208,10 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!loadingPlayers && playersData.length === 0) {
+    if (!loadingSupabaseTable && playersData.length === 0) {
       insert(favoritePlayersData).catch(console.error);
     }
-  }, [loadingPlayers, playersData.length, insert]);
+  }, [loadingSupabaseTable, playersData.length, insert]);
 
   useEffect(() => {
     if (usingLocalStorage) {
