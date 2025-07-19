@@ -152,19 +152,6 @@ export default function Profile() {
       });
     }
   };
-        name: editForm.name,
-        bio: editForm.bio
-      });
-      // Recharge le profil depuis Supabase pour garantir la persistance
-      const updatedProfile = await getCurrentProfile();
-      setUser(updatedProfile);
-      setEditingProfile(false);
-      toast({
-        title: "Profil mis à jour !",
-        description: "Vos informations ont été sauvegardées.",
-      });
-    }
-  };
 
   const handleToggleNotifications = () => {
     setNotifications(!notifications);
@@ -230,30 +217,11 @@ export default function Profile() {
     }
   };
 
-  const handleLogout = async () => {
-    // Clear localStorage instead of Supabase logout
-    localStorage.removeItem('currentUserProfile');
-    setUser(null);
-    setShowLoginModal(true);
-    toast({
-      title: "Déconnexion réussie",
-      description: "Vous avez été déconnecté avec succès"
-    });
-  };
-
   const handleContactSupport = () => {
     const subject = encodeURIComponent("Demande d'aide - Ballon d'Or 2025");
     const body = encodeURIComponent("Bonjour,\n\nJ'ai besoin d'aide concernant :\n\n[Décrivez votre demande]\n\nCordialement");
     window.open(`mailto:support@ballondor2025.com?subject=${subject}&body=${body}`);
   };
-
-  // Handler pour changer l'avatar via fichier local
-  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const newAvatar = event.target?.result as string;
 
   // Show loading state
   if (loading) {
@@ -551,7 +519,7 @@ export default function Profile() {
         
         <FeatureFlagsModal
           open={showFeatureFlagsModal}
-          onOpenChange={open => setShowFeatureFlagsModal(!!open)}
+          onOpenChange={(open) => setShowFeatureFlagsModal(!!open)}
         />
       </main>
     </div>
