@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase, storage } from "@/lib/supabaseClient";
 
-export function useSupabaseTable(table: string, filter?: Record<string, any>) {
+export function useSupabaseTable(table: string, filter?: Record<string, any>, columnsToSelect?: string) {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +17,7 @@ export function useSupabaseTable(table: string, filter?: Record<string, any>) {
         if (supabase) {
           try {
             // Try Supabase first
-            let query = supabase.from(table).select('*');
+            let query = supabase.from(table).select(columnsToSelect || '*');
             
             if (filter) {
               Object.entries(filter).forEach(([key, value]) => {
