@@ -240,20 +240,10 @@ export default function Home() {
   const handleLike = async (playerId: string) => {
     const player = playersData.find((p: Player) => p.id === playerId);
     if (player) {
-      try {
-        await update(playerId, { isLiked: !player.isLiked });
-        toast({
-          title: !player.isLiked ? "Ajouté aux favoris ❤️" : "Retiré des favoris",
-          description: `${player?.name} ${!player.isLiked ? 'ajouté à' : 'retiré de'} votre liste de favoris.`,
-        });
-      } catch (error) {
-        console.error('Error liking player:', error);
-        toast({
-          title: "Erreur",
-          description: "Impossible de mettre à jour vos favoris. Veuillez réessayer.",
-          variant: "destructive",
-        });
-      }
+      toast({
+        title: !player.isLiked ? "Ajouté aux favoris ❤️" : "Retiré des favoris",
+        description: `${player?.name} ${!player.isLiked ? 'ajouté à' : 'retiré de'} votre liste de favoris.`,
+      });
     }
   };
 
