@@ -9,7 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "next-themes";
-import { getCurrentProfile, updateCurrentProfile, createNewUser, createOrUpdateUserProfile } from "@/utils/userProfiles";
+import { useAuth } from "@/hooks/useAuth";
+import { useProfile } from "@/hooks/useProfile";
 import { AvatarUploadModal } from "@/components/ui/avatar-upload-modal";
 import { SettingsModal } from "@/components/ui/settings-modal";
 import { LoginModal } from "@/components/ui/login-modal";
@@ -39,8 +40,8 @@ import { useSupabaseTable } from "@/hooks/useSupabaseTable";
 import { PlayerCard } from "@/components/ui/player-card";
 
 export default function Profile() {
-  const [user, setUser] = useState<any | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, logout, isAuthenticated } = useAuth();
+  const { profile, loading, updateProfile, error: profileError } = useProfile();
   const [notifications, setNotifications] = useState(true);
   const [editingProfile, setEditingProfile] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
@@ -60,41 +61,97 @@ export default function Profile() {
   const { data: playersData } = useSupabaseTable('players');
   const [favoritePlayers, setFavoritePlayers] = useState<any[]>([]);
 
-  // Charger le profil utilisateur au démarrage
+  // Initialize edit form when profile loads
   useEffect(() => {
-    async function fetchProfile() {
-      setLoading(true);
-      // Toujours recharger depuis Supabase
-      const profile = await getCurrentProfile();
-      setUser(profile);
-      if (profile) {
-        setEditForm({
-          name: profile.name,
-          bio: profile.bio
-        });
-      }
-      setLoading(false);
+    if (profile) {
+      setEditForm({
+        name: profile.name || '',
+        bio: profile.bio || ''
+      });
     }
-    fetchProfile();
-  }, []);
+  }, [profile]);
 
   useEffect(() => {
     async function fetchFavorites() {
-      // Using localStorage instead of Supabase
-      const favorites = JSON.parse(localStorage.getItem('userFavorites') || '[]');
-      const players = JSON.parse(localStorage.getItem('table_players') || '[]');
-      const favoritePlayersList = favorites.map((fav: any) => 
-        players.find((p: any) => p.id === fav.player_id)
-      ).filter(Boolean);
-      setFavoritePlayers(favoritePlayersList);
+      if (user) {
+        const favorites = JSON.parse(localStorage.getItem('userFavorites') || '[]');
+        const userFavorites = favorites.filter((fav: any) => fav.user_id === user.id);
+        const players = JSON.parse(localStorage.getItem('table_players') || '[]');
+        const favoritePlayersList = userFavorites.map((fav: any) => 
+          players.find((p: any) => p.id === fav.player_id)
+        ).filter(Boolean);
+        setFavoritePlayers(favoritePlayersList);
+      }
     }
     fetchFavorites();
-  }, []);
+  }, [user]);
 
-  // Lors de la modification du profil, update dans la base puis recharge depuis Supabase
   const handleSaveProfile = async () => {
-    if (user) {
-      await createOrUpdateUserProfile({
+    if (profile) {
+      try {
+        await updateProfile({
+          name: editForm.name,
+          bio: editForm.bio
+        });
+        setEditingProfile(false);
+        toast({
+          title: "Profil mis à jour !",
+          description: "Vos informations ont été sauvegardées.",
+        });
+      } catch (error) {
+        toast({
+          title: "Erreur",
+          description: "Impossible de sauvegarder le profil.",
+          variant: "destructive"
+        });
+      }
+    }
+  };
+
+  const handleAvatarChange = async (newAvatar: string) => {
+    try {
+      await updateProfile({ avatar: newAvatar });
+      toast({
+        title: "Avatar mis à jour !",
+        description: "Votre photo de profil a été modifiée."
+      });
+    } catch (error) {
+      toast({
+        title: "Erreur",
+        description: "Impossible de modifier l'avatar.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && profile) {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const newAvatar = event.target?.result as string;
+        await handleAvatarChange(newAvatar);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      setShowLoginModal(true);
+      toast({
+        title: "Déconnexion réussie",
+        description: "Vous avez été déconnecté avec succès"
+      });
+    } catch (error) {
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de la déconnexion",
+        variant: "destructive"
+      });
+    }
+  };
         name: editForm.name,
         bio: editForm.bio
       });
@@ -197,18 +254,8 @@ export default function Profile() {
       const reader = new FileReader();
       reader.onload = async (event) => {
         const newAvatar = event.target?.result as string;
-        const updatedProfile = await createOrUpdateUserProfile({ avatar: newAvatar });
-        setUser(updatedProfile);
-        toast({
-          title: "Avatar mis à jour !",
-          description: "Votre photo de profil a été modifiée."
-        });
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
-  // Ne pas rendre le composant si user n'est pas chargé
+  // Show loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-background pb-20 flex items-center justify-center">
@@ -220,7 +267,8 @@ export default function Profile() {
     );
   }
 
-  if (!user && !loading) {
+  // Show login if not authenticated
+  if (!isAuthenticated || !user) {
     setTimeout(() => setShowLoginModal(true), 0);
     return (
       <>
@@ -234,6 +282,17 @@ export default function Profile() {
           </div>
         </div>
       </>
+    );
+  }
+
+  // Show profile not found
+  if (!profile && !loading) {
+    return (
+      <div className="min-h-screen bg-background pb-20 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground">Profil non trouvé.</p>
+        </div>
+      </div>
     );
   }
 
@@ -271,8 +330,8 @@ export default function Profile() {
           <CardContent className="p-6 text-center space-y-4">
             <div className="relative inline-block">
               <Avatar className="w-24 h-24 mx-auto ring-4 ring-primary/20 cursor-pointer" onClick={() => setShowAvatarModal(true)}>
-                <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="text-2xl">{user.name.slice(0, 2)}</AvatarFallback>
+                <AvatarImage src={profile?.avatar} alt={profile?.name} />
+                <AvatarFallback className="text-2xl">{profile?.name?.slice(0, 2) || 'U'}</AvatarFallback>
               </Avatar>
               <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-primary rounded-full flex items-center justify-center animate-glow">
                 <Trophy className="w-4 h-4 text-primary-foreground" />
@@ -294,23 +353,23 @@ export default function Profile() {
             </div>
             
             <div className="space-y-2">
-              <h2 className="text-xl font-bold text-gradient-gold">{user.name}</h2>
-              <p className="text-sm text-muted-foreground">{user.username}</p>
-              <p className="text-sm leading-relaxed">{user.bio}</p>
-              <p className="text-xs text-muted-foreground">{user.joinDate}</p>
+              <h2 className="text-xl font-bold text-gradient-gold">{profile?.name}</h2>
+              <p className="text-sm text-muted-foreground">{profile?.username}</p>
+              <p className="text-sm leading-relaxed">{profile?.bio}</p>
+              <p className="text-xs text-muted-foreground">{profile?.joinDate}</p>
             </div>
 
             <div className="flex justify-center gap-6">
               <div className="text-center">
-                <div className="font-bold text-lg text-primary">{user.followers.toLocaleString()}</div>
+                <div className="font-bold text-lg text-primary">{profile?.followers?.toLocaleString() || 0}</div>
                 <div className="text-xs text-muted-foreground">Followers</div>
               </div>
               <div className="text-center">
-                <div className="font-bold text-lg text-primary">{user.following}</div>
+                <div className="font-bold text-lg text-primary">{profile?.following || 0}</div>
                 <div className="text-xs text-muted-foreground">Suivi</div>
               </div>
               <div className="text-center">
-                <div className="font-bold text-lg text-primary">{user.stats?.votes ?? 0}</div>
+                <div className="font-bold text-lg text-primary">{profile?.stats?.votes || 0}</div>
                 <div className="text-xs text-muted-foreground">Votes</div>
               </div>
             </div>
@@ -476,15 +535,8 @@ export default function Profile() {
         <AvatarUploadModal
           isOpen={showAvatarModal}
           onClose={() => setShowAvatarModal(false)}
-          currentAvatar={user.avatar}
-          onAvatarChange={(newAvatar) => {
-            const updatedProfile = createOrUpdateUserProfile({ avatar: newAvatar });
-            setUser(updatedProfile);
-            toast({
-              title: "Avatar mis à jour !",
-              description: "Votre photo de profil a été modifiée."
-            });
-          }}
+          currentAvatar={profile?.avatar || ''}
+          onAvatarChange={handleAvatarChange}
         />
         <ChangePasswordModal
           isOpen={showChangePasswordModal}

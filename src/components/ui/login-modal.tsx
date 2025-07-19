@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { LogIn, UserPlus, Mail, Lock, User, Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { getCurrentProfile, createOrUpdateUserProfile } from "@/utils/userProfiles";
+import { useAuth } from "@/hooks/useAuth";
 import React from "react";
 
 interface LoginModalProps {
@@ -31,6 +31,7 @@ export const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { login, register, loading: authLoading } = useAuth();
   const [emailValid, setEmailValid] = useState(true);
   const [passwordStrength, setPasswordStrength] = useState(0);
   const [passwordsMatch, setPasswordsMatch] = useState(true);
@@ -69,13 +70,11 @@ export const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
 
     setIsLoading(true);
     
-    // Mock login - always succeed for demo
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+      const { data, error } = await login(email, password);
       
-      let profile = await getCurrentProfile();
-      if (!profile) {
-        profile = await createOrUpdateUserProfile({ name: email.split('@')[0] });
+      if (error) {
+        throw new Error(error.message);
       }
       
       navigate("/");
@@ -87,7 +86,7 @@ export const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
     } catch (error: any) {
       toast({
         title: "Erreur de connexion",
-        description: "Une erreur est survenue lors de la connexion.",
+        description: error.message || "Une erreur est survenue lors de la connexion.",
         variant: "destructive"
       });
     }
@@ -129,14 +128,12 @@ export const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
     }
     setIsLoading(true);
     
-    // Mock signup - always succeed for demo
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+      const { data, error } = await register(email, password, signupForm.name);
       
-      const profile = await createOrUpdateUserProfile({
-        name: signupForm.name || email.split('@')[0],
-        username: email.split('@')[0],
-      });
+      if (error) {
+        throw new Error(error.message);
+      }
       
       navigate("/");
       onClose();
@@ -147,7 +144,7 @@ export const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
     } catch (error: any) {
       toast({
         title: "Erreur d'inscription",
-        description: "Une erreur est survenue lors de l'inscription.",
+        description: error.message || "Une erreur est survenue lors de l'inscription.",
         variant: "destructive"
       });
     }

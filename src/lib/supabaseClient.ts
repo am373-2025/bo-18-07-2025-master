@@ -17,13 +17,51 @@ const isValidUrl = (url: string): boolean => {
 const isValidSupabaseConfig = isValidUrl(supabaseUrl) && supabaseKey && supabaseKey.trim() !== '';
 
 if (!isValidSupabaseConfig) {
-  console.warn('Supabase configuration missing. Using localStorage fallback.');
+  console.warn('⚠️ Supabase configuration missing. Using localStorage fallback.');
+  console.warn('To use Supabase, set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local');
 }
 
 export const supabase = isValidSupabaseConfig 
   ? createClient(supabaseUrl, supabaseKey)
   : null;
 
+// Auth helpers
+export const getCurrentUser = async () => {
+  if (!supabase) return null;
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
+};
+
+export const signIn = async (email: string, password: string) => {
+  if (!supabase) {
+    throw new Error('Supabase not configured');
+  }
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+  return { data, error };
+};
+
+export const signUp = async (email: string, password: string, metadata?: any) => {
+  if (!supabase) {
+    throw new Error('Supabase not configured');
+  }
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: metadata,
+    },
+  });
+  return { data, error };
+};
+
+export const signOut = async () => {
+  if (!supabase) return { error: null };
+  const { error } = await supabase.auth.signOut();
+  return { error };
+};
 // Fallback functions for when Supabase is not configured
 export const storage = {
   get: <T>(key: string, defaultValue: T): T => {

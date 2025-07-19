@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Bell, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useResponsive } from "@/hooks/useResponsive";
+import { useProfile } from "@/hooks/useProfile";
 import ballonDorIcon from "@/assets/ballon-dor-icon.png";
 import mbappePhoto from "@/assets/player-mbappe.jpg";
 import haalandPhoto from "@/assets/player-haaland.jpg";
@@ -87,6 +88,7 @@ export default function Home() {
   const [activeFilter, setActiveFilter] = useState("all");
   const { toast } = useToast();
   const { isMobile, isTablet } = useResponsive();
+  const { addVote, toggleFavorite } = useProfile();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [supabaseStatus, setSupabaseStatus] = useState<string>("");
@@ -221,7 +223,12 @@ export default function Home() {
     const player = playersData.find((p: Player) => p.id === playerId);
     if (player) {
       try {
+        // Update player votes in database
         await update(playerId, { votes: (player.votes || 0) + 1 });
+        
+        // Add user vote record
+        await addVote(playerId, player.name);
+        
         toast({
           title: "Vote enregistré !",
           description: `Vous avez voté pour ${player?.name}. Merci pour votre participation !`,
@@ -230,7 +237,7 @@ export default function Home() {
         console.error('Error voting:', error);
         toast({
           title: "Erreur",
-          description: "Impossible d'enregistrer votre vote. Veuillez réessayer.",
+          description: "Impossible d'enregistrer votre vote. Vous devez être connecté.",
           variant: "destructive",
         });
       }
@@ -240,10 +247,20 @@ export default function Home() {
   const handleLike = async (playerId: string) => {
     const player = playersData.find((p: Player) => p.id === playerId);
     if (player) {
-      toast({
-        title: !player.isLiked ? "Ajouté aux favoris ❤️" : "Retiré des favoris",
-        description: `${player?.name} ${!player.isLiked ? 'ajouté à' : 'retiré de'} votre liste de favoris.`,
-      });
+      try {
+        await toggleFavorite(playerId, player.name);
+        toast({
+          title: "Favoris mis à jour",
+          description: `${player.name} ajouté/retiré de vos favoris.`,
+        });
+      } catch (error) {
+        console.error('Error toggling favorite:', error);
+        toast({
+          title: "Erreur",
+          description: "Vous devez être connecté pour gérer vos favoris.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
