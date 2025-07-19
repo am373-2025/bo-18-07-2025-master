@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import { useProfile } from "@/hooks/useProfile";
+import { useSupabaseTable } from "@/hooks/useSupabaseTable";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -8,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { CommentModal } from "@/components/ui/comment-modal";
 import { ShareModal } from "@/components/ui/share-modal";
 import { PostActionsMenu } from "@/components/ui/post-actions-menu";
+import { LoginModal } from "@/components/ui/login-modal";
 import { CreatePollModal } from "@/components/ui/create-poll-modal";
 import { MediaUploadModal } from "@/components/ui/media-upload-modal";
 import { Heart, MessageCircle, Plus, Image, Video, BarChart3, Trophy, Users, Bookmark } from "lucide-react";
@@ -85,19 +89,70 @@ const feedData = [
 ];
 
 export default function Club() {
+  const { user, isAuthenticated } = useAuth();
+  const { profile, updateProfile } = useProfile();
+  const { data: userPosts, insert: insertPost, update: updatePost, remove: removePost } = useSupabaseTable('user_posts');
+  const { data: userComments, insert: insertComment } = useSupabaseTable('user_comments');
+  const { data: userFavorites, insert: insertFavorite, remove: removeFavorite } = useSupabaseTable('user_favorites');
   const [posts, setPosts] = useState(feedData);
   const [newPost, setNewPost] = useState("");
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [showPollModal, setShowPollModal] = useState(false);
   const [showMediaModal, setShowMediaModal] = useState(false);
   const [selectedPost, setSelectedPost] = useState<any>(null);
   const [editingPost, setEditingPost] = useState<any>(null);
-  const [currentUserId] = useState("currentUser");
+  const currentUserId = user?.id || "currentUser";
   const { toast } = useToast();
 
+  // Charger les posts utilisateur depuis Supabase
+  React.useEffect(() => {
+    if (userPosts && userPosts.length > 0) {
+      const supabasePosts = userPosts.map(post => ({
+        id: post.id,
+        user: {
+          name: profile?.name || "Vous",
+          avatar: profile?.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop",
+          verified: false
+        },
+        content: post.content,
+        image: post.image_url,
+        video: post.video_url,
+        likes: post.likes || 0,
+        comments: post.comments_count || 0,
+        shares: post.shares || 0,
+        timestamp: new Date(post.created_at).toLocaleString(),
+        type: post.post_type || "post",
+        isLiked: false,
+        likedBy: [],
+        isFavorite: false,
+        isReported: false
+      }));
+      setPosts([...supabasePosts, ...feedData]);
+    }
+  }, [userPosts, profile]);
+
+  const requireAuth = (action: () => void) => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true);
+      toast({
+        title: "Connexion requise",
+        description: "Vous devez être connecté pour effectuer cette action.",
+        variant: "destructive"
+      });
+      return;
+    }
+    action();
+  };
+
   const handleLike = (postId: string) => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true);
+      return;
+    }
+
     const post = posts.find(p => p.id === postId);
     const hasLiked = post?.likedBy?.includes(currentUserId) || false;
     
@@ -190,15 +245,43 @@ export default function Club() {
     });
   };
 
-  const handleCreatePost = () => {
+  const handleCreatePost = async () => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true);
+      return;
+    }
+
     if (newPost.trim()) {
-      const post: any = {
-        id: Date.now().toString(),
-        user: {
-          name: "Vous",
-          avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop",
-          verified: false
-        },
+      try {
+        // Sauvegarder en Supabase
+        const { data, error } = await insertPost({
+          user_id: currentUserId,
+          content: newPost,
+          post_type: "text",
+          likes: 0,
+          comments_count: 0,
+          shares: 0
+        });
+
+        if (error) throw new Error(error);
+
+        // Mettre à jour les stats du profil
+        if (profile) {
+          await updateProfile({
+            stats: {
+              ...profile.stats,
+              posts: profile.stats.posts + 1
+            }
+          });
+        }
+
+        const post: any = {
+          id: data?.[0]?.id || Date.now().toString(),
+          user: {
+            name: profile?.name || "Vous",
+            avatar: profile?.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop",
+            verified: false
+          },
         content: newPost,
         likes: 0,
         comments: 0,
@@ -209,85 +292,146 @@ export default function Club() {
         likedBy: [],
         isFavorite: false,
         isReported: false
-      };
-      
-      setPosts([post, ...posts]);
-      setNewPost("");
-      setShowCreatePost(false);
-      
-      toast({
-        title: "Publication créée !",
-        description: "Votre post a été publié avec succès."
-      });
+        };
+        
+        setPosts([post, ...posts]);
+        setNewPost("");
+        setShowCreatePost(false);
+        
+        toast({
+          title: "Publication créée !",
+          description: "Votre post a été publié avec succès et sauvegardé."
+        });
+      } catch (error) {
+        console.error('Error creating post:', error);
+        toast({
+          title: "Erreur",
+          description: "Impossible de sauvegarder votre post. Vérifiez votre connexion.",
+          variant: "destructive"
+        });
+      }
     }
   };
 
-  const handleCreatePoll = (pollData: { question: string; options: string[] }) => {
-    const post = {
-      id: Date.now().toString(),
-      user: {
-        name: "Vous",
-        avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop",
-        verified: false
-      },
-      content: "",
-      poll: {
-        question: pollData.question,
-        options: pollData.options.map(option => ({ text: option, votes: 0, voted: false }))
-      },
-      likes: 0,
-      comments: 0,
-      shares: 0,
-      timestamp: "maintenant",
-      type: "poll",
-      isLiked: false,
-      likedBy: [],
-      isFavorite: false,
-      isReported: false
-    } as any;
-    
-    setPosts([post, ...posts]);
-    toast({
-      title: "Sondage créé !",
-      description: "Votre sondage a été publié avec succès."
-    });
-  };
+  const handleCreatePoll = async (pollData: { question: string; options: string[] }) => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true);
+      return;
+    }
 
-  const handleMediaUpload = (file: File, mediaType: 'image' | 'video') => {
-    // Créer une URL temporaire pour prévisualiser le fichier
-    const mediaUrl = URL.createObjectURL(file);
-    
-    const postData = {
-      id: Date.now().toString(),
-      user: {
-        name: "Vous",
-        avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop",
-        verified: false
-      },
-        content: newPost || "",
+    try {
+      // Sauvegarder en Supabase
+      const { data, error } = await insertPost({
+        user_id: currentUserId,
+        content: pollData.question,
+        post_type: "poll",
+        likes: 0,
+        comments_count: 0,
+        shares: 0
+      });
+
+      if (error) throw new Error(error);
+
+      const post = {
+        id: data?.[0]?.id || Date.now().toString(),
+        user: {
+          name: profile?.name || "Vous",
+          avatar: profile?.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop",
+          verified: false
+        },
+        content: "",
+        poll: {
+          question: pollData.question,
+          options: pollData.options.map(option => ({ text: option, votes: 0, voted: false }))
+        },
         likes: 0,
         comments: 0,
         shares: 0,
         timestamp: "maintenant",
-        type: "post",
+        type: "poll",
         isLiked: false,
         likedBy: [],
         isFavorite: false,
         isReported: false
-    };
+      } as any;
+      
+      setPosts([post, ...posts]);
+      toast({
+        title: "Sondage créé !",
+        description: "Votre sondage a été publié avec succès et sauvegardé."
+      });
+    } catch (error) {
+      console.error('Error creating poll:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de sauvegarder votre sondage.",
+        variant: "destructive"
+      });
+    }
+  };
 
-    const post = mediaType === 'image' 
-      ? { ...postData, image: mediaUrl }
-      : { ...postData, video: mediaUrl };
-    
-    setPosts([post as any, ...posts]);
-    setNewPost("");
-    setShowCreatePost(false);
-    
-    toast({
-      title: "Média publié !",
-      description: `Votre ${mediaType === 'image' ? 'photo' : 'vidéo'} a été publié avec succès.`
-    });
+  const handleMediaUpload = async (file: File, mediaType: 'image' | 'video') => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true);
+      return;
+    }
+
+    // Créer une URL temporaire pour prévisualiser le fichier
+    const mediaUrl = URL.createObjectURL(file);
+
+    try {
+      // Sauvegarder en Supabase
+      const { data, error } = await insertPost({
+        user_id: currentUserId,
+        content: newPost || "",
+        [mediaType === 'image' ? 'image_url' : 'video_url']: mediaUrl,
+        post_type: "text",
+        likes: 0,
+        comments_count: 0,
+        shares: 0,
+      });
+
+      if (error) throw new Error(error);
+
+      const postData = {
+        id: data?.[0]?.id || Date.now().toString(),
+        user: {
+          name: profile?.name || "Vous",
+          avatar: profile?.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop",
+          verified: false
+        },
+          content: newPost || "",
+          likes: 0,
+          comments: 0,
+          shares: 0,
+          timestamp: "maintenant",
+          type: "post",
+          isLiked: false,
+          likedBy: [],
+          isFavorite: false,
+          isReported: false
+      };
+
+      const post = mediaType === 'image' 
+        ? { ...postData, image: mediaUrl }
+        : { ...postData, video: mediaUrl };
+      
+      setPosts([post as any, ...posts]);
+      setNewPost("");
+      setShowCreatePost(false);
+      
+      toast({
+        title: "Média publié !",
+        description: `Votre ${mediaType === 'image' ? 'photo' : 'vidéo'} a été publié avec succès et sauvegardé.`
+      });
+    } catch (error) {
+      console.error('Error uploading media:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de sauvegarder votre média.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleEditPost = (post: any) => {
@@ -296,35 +440,85 @@ export default function Club() {
     setShowCreatePost(true);
   };
 
-  const updatePost = () => {
+  const updatePost = async () => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true);
+      return;
+    }
+
     if (editingPost && newPost.trim()) {
-      setPosts(posts.map(p => 
-        p.id === editingPost.id 
-          ? { ...p, content: newPost }
-          : p
-      ));
-      setEditingPost(null);
-      setNewPost("");
-      setShowCreatePost(false);
-      toast({
-        title: "Post modifié !",
-        description: "Votre publication a été mise à jour."
-      });
+      try {
+        // Mettre à jour en Supabase
+        const { error } = await updatePost(editingPost.id, {
+          content: newPost,
+          updated_at: new Date().toISOString()
+        });
+
+        if (error) throw new Error(error);
+
+        setPosts(posts.map(p => 
+          p.id === editingPost.id 
+            ? { ...p, content: newPost }
+            : p
+        ));
+        setEditingPost(null);
+        setNewPost("");
+        setShowCreatePost(false);
+        toast({
+          title: "Post modifié !",
+          description: "Votre publication a été mise à jour et sauvegardée."
+        });
+      } catch (error) {
+        console.error('Error updating post:', error);
+        toast({
+          title: "Erreur",
+          description: "Impossible de mettre à jour votre post.",
+          variant: "destructive"
+        });
+      }
     }
   };
 
-  const handleFavoritePost = (postId: string) => {
-    setPosts(posts.map(post => 
-      post.id === postId 
-        ? { ...post, isFavorite: !post.isFavorite }
-        : post
-    ));
-    
-    const post = posts.find(p => p.id === postId);
-    toast({
-      title: post?.isFavorite ? "Retiré des favoris" : "Ajouté aux favoris",
-      description: post?.isFavorite ? "Post retiré de vos favoris" : "Post ajouté à vos favoris"
-    });
+  const handleFavoritePost = async (postId: string) => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true);
+      return;
+    }
+
+    try {
+      const post = posts.find(p => p.id === postId);
+      const isFavorited = post?.isFavorite;
+
+      if (isFavorited) {
+        // Retirer des favoris
+        await removeFavorite(postId);
+      } else {
+        // Ajouter aux favoris
+        await insertFavorite({
+          user_id: currentUserId,
+          target_id: postId,
+          target_type: 'post'
+        });
+      }
+
+      setPosts(posts.map(p => 
+        p.id === postId 
+          ? { ...p, isFavorite: !p.isFavorite }
+          : p
+      ));
+      
+      toast({
+        title: !isFavorited ? "Ajouté aux favoris" : "Retiré des favoris",
+        description: !isFavorited ? "Post ajouté à vos favoris" : "Post retiré de vos favoris"
+      });
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de modifier vos favoris.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleReportPost = (postId: string) => {
@@ -340,15 +534,30 @@ export default function Club() {
     });
   };
 
-  const handleDeletePost = (postId: string) => {
-    setPosts(posts.filter(p => p.id !== postId));
-    setEditingPost(null);
-    setNewPost("");
-    setShowCreatePost(false);
-    toast({
-      title: "Post supprimé !",
-      description: "Votre publication a été supprimée avec succès."
-    });
+  const handleDeletePost = async (postId: string) => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true);
+      return;
+    }
+
+    try {
+      await removePost(postId);
+      setPosts(posts.filter(p => p.id !== postId));
+      setEditingPost(null);
+      setNewPost("");
+      setShowCreatePost(false);
+      toast({
+        title: "Post supprimé !",
+        description: "Votre publication a été supprimée avec succès."
+      });
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de supprimer votre post.",
+        variant: "destructive"
+      });
+    }
   };
 
   const PostCard = ({ post }: { post: any }) => (
@@ -535,7 +744,7 @@ export default function Club() {
           <CardContent className="p-4">
             <Button
               className="w-full btn-golden-outline justify-start"
-              onClick={() => setShowCreatePost(!showCreatePost)}
+              onClick={() => requireAuth(() => setShowCreatePost(!showCreatePost))}
             >
               <Plus className="w-5 h-5 mr-3" />
               Partager votre avis sur le Ballon d'Or...
@@ -562,7 +771,7 @@ export default function Club() {
                   <Image className="w-4 h-4" />
                   Photo/Vidéo
                 </Button>
-                <Button size="sm" variant="outline" className="flex items-center gap-2" onClick={() => setShowPollModal(true)}>
+                <Button size="sm" variant="outline" className="flex items-center gap-2" onClick={() => requireAuth(() => setShowPollModal(true))}>
                   <BarChart3 className="w-4 h-4" />
                   Sondage
                 </Button>
@@ -649,6 +858,11 @@ export default function Club() {
         isOpen={showMediaModal}
         onClose={() => setShowMediaModal(false)}
         onUpload={handleMediaUpload}
+      />
+
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
       />
     </div>
   );
