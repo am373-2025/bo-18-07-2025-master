@@ -15,7 +15,6 @@ import { useResponsive } from "@/hooks/useResponsive";
 import { useProfile } from "@/hooks/useProfile";
 import { Link } from "react-router-dom";
 import { useSupabaseTable } from "@/hooks/useSupabaseTable";
-import { realRankingStatic } from "./Ranking";
 import type { Player } from "@/types";
 import { Trophy } from "lucide-react";
 
@@ -91,7 +90,15 @@ export default function Home() {
     update,
     usingLocalStorage
   } = useSupabaseTable<Player>('players', undefined, 'id, slug, name, position, club, photo, votes, country, age, ranking, trend');
-  const top5Ranking = realRankingStatic.slice(0, 5);
+  
+  // Top 5 calculé depuis les données Supabase
+  const top5Ranking = playersData
+    .sort((a, b) => (b.votes || 0) - (a.votes || 0))
+    .slice(0, 5)
+    .map((player, index) => ({
+      ...player,
+      rank: index + 1
+    }));
 
   // Handlers pour le top 5 (pas de like, vote local)
   const [top5Votes, setTop5Votes] = useState<{ [name: string]: number }>({});
@@ -275,7 +282,12 @@ export default function Home() {
         {/* Top 5 Classement réel */}
         {!loadingSupabaseTable && (
         <div className="space-y-6">
-          <h2 className="text-xl font-bold mb-4">Top 5 Classement réel</h2>
+          <div className="text-center">
+            <h2 className="text-xl font-bold mb-2 text-gradient-gold">Top 5 Ballon d'Or 2025</h2>
+            <Badge variant="outline" className="text-xs mb-4">
+              {playersData.length} candidats • {usingLocalStorage ? 'Données locales' : 'Données Supabase'}
+            </Badge>
+          </div>
           <div className="grid gap-4">
             {top5Ranking.map((player, index) => (
               <PlayerCard
@@ -285,7 +297,7 @@ export default function Home() {
                   id: player.name,
                   votes: (top5Votes[player.name] || 0) + (player.votes || 0),
                   isLiked: false,
-                  slug: undefined,
+                  slug: player.slug,
                 }}
                 onViewDetails={handleTop5ViewDetails}
                 onVote={() => handleTop5Vote(player.name)}

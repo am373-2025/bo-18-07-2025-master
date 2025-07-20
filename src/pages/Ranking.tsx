@@ -5,49 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Trophy, Medal, Award, TrendingUp, Users, Newspaper } from "lucide-react";
-import { favoritePlayersNames } from "@/utils/ballonDorPlayers";
-import { fetchPlayerByName } from "@/lib/utils";
+import { useSupabaseTable } from "@/hooks/useSupabaseTable";
 import { PlayerDetailsModal } from "@/components/ui/player-details-modal";
-
-function getRandomInt(min: number, max: number) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-// Définir d'abord le classement réel statique
-export const realRankingStatic = [
-  { name: "Ousmane Dembélé", club: "PSG", photo: "https://img.a.transfermarkt.technology/portrait/big/288230-1684148641.jpg?lm=1", goals: 21, assists: 6, matches: 29 },
-  { name: "Lamine Yamal", club: "Barcelona", photo: "https://media.api-sports.io/football/players/12345.png", goals: 9, assists: 13, matches: 31 },
-  { name: "Raphinha", club: "Barcelona", photo: "https://media.api-sports.io/football/players/12346.png", goals: 18, assists: 9, matches: 34 },
-  { name: "Vitinha", club: "PSG", photo: "https://media.api-sports.io/football/players/12347.png", goals: 6, assists: 2, matches: 28 },
-  { name: "Mohamed Salah", club: "Liverpool", photo: "https://media.api-sports.io/football/players/306.png", goals: 29, assists: 18, matches: 38 },
-  { name: "Joao Neves", club: "PSG", photo: "https://media.api-sports.io/football/players/12348.png", goals: 3, assists: 7, matches: 30 },
-  { name: "Achraf Hakimi", club: "PSG", photo: "https://media.api-sports.io/football/players/12349.png", goals: 6, assists: 14, matches: 32 },
-  { name: "Pedri", club: "Barcelona", photo: "https://media.api-sports.io/football/players/12350.png", goals: 4, assists: 5, matches: 33 },
-  { name: "Robert Lewandowski", club: "Barcelona", photo: "https://media.api-sports.io/football/players/874.png", goals: 27, assists: 7, matches: 36 },
-  { name: "Nuno Mendes", club: "PSG", photo: "https://media.api-sports.io/football/players/12351.png", goals: 5, assists: 4, matches: 28 },
-  { name: "Harry Kane", club: "Bayern Munich", photo: "https://media.api-sports.io/football/players/120.png", goals: 26, assists: 8, matches: 34 },
-  { name: "Joshua Kimmich", club: "Bayern Munich", photo: "https://media.api-sports.io/football/players/12352.png", goals: 2, assists: 9, matches: 33 },
-  { name: "Virgil Van Dijk", club: "Liverpool", photo: "https://media.api-sports.io/football/players/12353.png", goals: 4, assists: 2, matches: 37 },
-  { name: "Kylian Mbappé", club: "Real Madrid", photo: "https://media.api-sports.io/football/players/278.png", goals: 31, assists: 7, matches: 36 },
-  { name: "Serhou Guirassy", club: "Dortmund", photo: "https://media.api-sports.io/football/players/12354.png", goals: 21, assists: 2, matches: 30 },
-  { name: "Bruno Fernandes", club: "Manchester United", photo: "https://media.api-sports.io/football/players/12355.png", goals: 8, assists: 9, matches: 34 },
-  { name: "William Saliba", club: "Arsenal", photo: "https://media.api-sports.io/football/players/12356.png", goals: 3, assists: 1, matches: 38 },
-  { name: "Yan Sommer", club: "Inter Milan", photo: "https://media.api-sports.io/football/players/12357.png", goals: 0, assists: 0, matches: 38 },
-  { name: "Lautaro Martínez", club: "Inter Milan", photo: "https://media.api-sports.io/football/players/12358.png", goals: 21, assists: 5, matches: 35 },
-  { name: "Jude Bellingham", club: "Real Madrid", photo: "https://media.api-sports.io/football/players/12359.png", goals: 11, assists: 10, matches: 38 },
-  // ... compléter jusqu'à 50 si besoin
-];
-
-// Puis définir les classements statiques pour chaque filtre
-const communityRankingStatic = [
-  ...realRankingStatic.map((p, i) => ({ ...p, points: 5000 - i * 100, percentage: 25 - i, trend: i === 0 ? '+1' : (i % 2 === 0 ? '-1' : '='), rank: i + 1 }))
-];
-const mediaRankingStatic = [
-  ...realRankingStatic.map((p, i) => ({ ...p, points: 4800 - i * 90, percentage: 24 - i, trend: i === 1 ? '+1' : (i % 2 === 1 ? '-1' : '='), rank: i + 1 }))
-];
-const bookmakersRankingStatic = [
-  ...realRankingStatic.map((p, i) => ({ ...p, points: 4700 - i * 80, percentage: 23 - i, trend: i === 2 ? '+1' : (i % 3 === 0 ? '-1' : '='), rank: i + 1 }))
-];
+import type { Player } from "@/types";
 
 // Fonction pour récupérer les votes utilisateurs depuis le localStorage
 function getUserVotesRanking() {
@@ -61,46 +21,59 @@ function getUserVotesRanking() {
 
 export default function Ranking() {
   const [activeTab, setActiveTab] = useState("community");
-  const [ranking, setRanking] = useState(communityRankingStatic); // Initialiser avec le classement communauté statique
-  const [avatars, setAvatars] = useState<{ [name: string]: string }>({});
-  const [realRanking] = useState(realRankingStatic);
-  const [loadingReal, setLoadingReal] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
+  
+  // Charger les 30 joueurs depuis Supabase
+  const {
+    data: playersData,
+    loading: loadingPlayers,
+    error: playersError,
+    usingLocalStorage
+  } = useSupabaseTable<Player>('players', undefined, 'id, slug, name, position, club, photo, votes, country, age, ranking, trend');
 
-  // Actualisation une fois par jour
-  useEffect(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    const lastUpdate = localStorage.getItem('rankingLastUpdate');
-    if (lastUpdate !== today) {
-      setRanking(communityRankingStatic); // Mettre à jour le classement communauté
-      localStorage.setItem('rankingLastUpdate', today);
-    }
-  }, []);
-
-  // Récupérer les vrais avatars API au premier rendu
-  useEffect(() => {
-    async function fetchAvatars() {
-      const newAvatars: { [name: string]: string } = {};
-      await Promise.all(ranking.map(async (player) => {
-        try {
-          const data = await fetchPlayerByName(player.name);
-          if (data && data.response && data.response[0]?.player?.photo) {
-            newAvatars[player.name] = data.response[0].player.photo;
-          }
-        } catch {}
+  // Créer les différents classements à partir des données Supabase
+  const createRankings = (players: Player[]) => {
+    // Trier par votes pour le classement communauté
+    const communityRanking = players
+      .sort((a, b) => (b.votes || 0) - (a.votes || 0))
+      .map((p, i) => ({ 
+        ...p, 
+        points: 5000 - i * 100, 
+        percentage: Math.max(5, 25 - i), 
+        trend: p.trend || (i === 0 ? '+1' : (i % 2 === 0 ? '-1' : '=')), 
+        rank: i + 1 
       }));
-      setAvatars(newAvatars);
-    }
-    fetchAvatars();
-  }, [ranking]);
 
-  // Récupérer le classement réel (top 20 par buts)
-  useEffect(() => {
-    setLoadingReal(true);
-    // Dans l'onglet "Classement réel", utiliser realRanking directement (plus de loading, plus d'appel API)
-    setLoadingReal(false);
-  }, []);
+    // Variante pour les médias (léger décalage)
+    const mediaRanking = players
+      .sort((a, b) => (b.votes || 0) - (a.votes || 0))
+      .map((p, i) => ({ 
+        ...p, 
+        points: 4800 - i * 90, 
+        percentage: Math.max(4, 24 - i), 
+        trend: p.trend || (i === 1 ? '+1' : (i % 2 === 1 ? '-1' : '=')), 
+        rank: i + 1 
+      }));
+
+    // Variante pour les bookmakers
+    const bookmakersRanking = players
+      .sort((a, b) => (b.votes || 0) - (a.votes || 0))
+      .map((p, i) => ({ 
+        ...p, 
+        points: 4700 - i * 80, 
+        percentage: Math.max(3, 23 - i), 
+        trend: p.trend || (i === 2 ? '+1' : (i % 3 === 0 ? '-1' : '=')), 
+        rank: i + 1 
+      }));
+
+    // Classement réel (par ranking existant ou par votes)
+    const realRanking = players
+      .sort((a, b) => (a.ranking || 999) - (b.ranking || 999))
+      .map((p, i) => ({ ...p, rank: i + 1 }));
+
+    return { communityRanking, mediaRanking, bookmakersRanking, realRanking };
+  };
 
   const getRankIcon = (rank: number) => {
     switch (rank) {
@@ -123,17 +96,22 @@ export default function Ranking() {
   };
 
   const getCurrentRanking = () => {
+    if (!playersData || playersData.length === 0) return [];
+    
+    const { communityRanking, mediaRanking, bookmakersRanking, realRanking } = createRankings(playersData);
+    
     switch (activeTab) {
       case "media":
-        return mediaRankingStatic;
+        return mediaRanking;
       case "bookmakers":
-        return bookmakersRankingStatic;
+        return bookmakersRanking;
       case "real":
-        return realRankingStatic;
+        return realRanking;
       default: // fans
-        return getUserVotesRanking();
+        return communityRanking;
     }
   };
+  
   const currentRanking = getCurrentRanking();
 
   return (
@@ -187,11 +165,34 @@ export default function Ranking() {
       </header>
 
       <main className="max-w-md mx-auto p-4 space-y-6 animate-fade-in">
+        {/* Loading state */}
+        {loadingPlayers && (
+          <div className="text-center py-8">
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-muted-foreground">Chargement des joueurs...</p>
+          </div>
+        )}
+
+        {/* Error state */}
+        {playersError && (
+          <div className="text-center py-8">
+            <p className="text-destructive">Erreur: {playersError}</p>
+            <p className="text-muted-foreground text-sm mt-2">
+              {usingLocalStorage ? 'Utilisation des données locales' : 'Vérifiez votre connexion'}
+            </p>
+          </div>
+        )}
+
         {activeTab === "real" ? (
           <div className="space-y-4">
-            <h2 className="text-xl font-bold text-center text-gradient-gold">🏆 Classement réel (à date du jour)</h2>
+            <div className="text-center mb-6">
+              <h2 className="text-xl font-bold text-gradient-gold mb-2">🏆 Classement Officiel Ballon d'Or 2025</h2>
+              <Badge variant="outline" className="text-xs">
+                {currentRanking.length} candidats • Mise à jour: {new Date().toLocaleDateString('fr-FR')}
+              </Badge>
+            </div>
             <div className="space-y-2">
-              {realRanking.map((player, i) => (
+              {currentRanking.map((player, i) => (
                 <Card key={`${player.name}-${i}`} className="card-golden hover:scale-[1.01] transition-all duration-200 cursor-pointer"
                   onClick={() => {
                     setSelectedPlayer({
@@ -206,7 +207,11 @@ export default function Ranking() {
                   <CardContent className="p-3">
                     <div className="flex items-center gap-3">
                       <div className="w-8 text-center">
-                        <span className="text-sm font-bold text-muted-foreground">#{i + 1}</span>
+                        {i < 3 ? (
+                          getRankIcon(i + 1)
+                        ) : (
+                          <span className="text-sm font-bold text-muted-foreground">#{i + 1}</span>
+                        )}
                       </div>
                       <Avatar className="w-10 h-10">
                         <AvatarImage src={player.photo} alt={player.name} />
@@ -215,13 +220,22 @@ export default function Ranking() {
                       <div className="flex-1 min-w-0">
                         <h4 className="font-medium truncate">{player.name}</h4>
                         <p className="text-xs text-muted-foreground truncate">{player.club}</p>
+                        {player.country && (
+                          <p className="text-xs text-muted-foreground truncate">{player.country}</p>
+                        )}
                       </div>
                       <div className="text-right">
-                        <div className="flex items-center gap-1">
-                          <span className="text-sm font-medium">{player.goals}⚽</span>
-                          <span className="text-xs text-muted-foreground">{player.assists}🅰️</span>
+                        <div className="flex items-center gap-1 mb-1">
+                          <span className="text-sm font-medium">{(player.votes || 0).toLocaleString()}</span>
+                          <span className="text-xs text-muted-foreground">votes</span>
                         </div>
-                        <div className="text-xs text-muted-foreground">{player.matches} matchs</div>
+                        <div className="flex items-center gap-1">
+                          {player.trend && (
+                            <span className={`text-xs ${getTrendColor(player.trend)}`}>
+                              {player.trend}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </CardContent>
@@ -233,11 +247,20 @@ export default function Ranking() {
           <>
             {/* Top 3 Podium horizontal moderne */}
             <div className="space-y-4">
+              <div className="text-center mb-6">
+                <h2 className="text-xl font-bold text-gradient-gold mb-2">
+                  🏆 Podium des Favoris - {activeTab === 'community' ? 'Votes Communauté' : activeTab === 'media' ? 'Classement Médias' : 'Cotes Bookmakers'}
+                </h2>
+                <Badge variant="outline" className="text-xs">
+                  {currentRanking.length} candidats • {usingLocalStorage ? 'Données locales' : 'Données Supabase'}
+                </Badge>
+              </div>
               <h2 className="text-xl font-bold text-center text-gradient-gold">
-                🏆 Podium des Favoris
+                Top 3
               </h2>
               
               {/* Podium horizontal compact */}
+              {currentRanking.length >= 3 && (
               <div className="flex items-end justify-center gap-2 px-4">
                 {/* 2ème place */}
                 <div className="flex-1 text-center animate-slide-up" style={{ animationDelay: '200ms' }}>
@@ -314,12 +337,13 @@ export default function Ranking() {
                   </div>
                 </div>
               </div>
+              )}
             </div>
 
             {/* Classement complet */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Classement complet</h3>
+                <h3 className="text-lg font-semibold">Top 30 complet</h3>
                 <Badge variant="outline" className="text-xs">
                   {currentRanking.length} candidats
                 </Badge>
@@ -349,7 +373,7 @@ export default function Ranking() {
                         </div>
                         
                         <Avatar className="w-10 h-10">
-                          <AvatarImage src={avatars[player.name] || player.photo} alt={player.name} />
+                          <AvatarImage src={player.photo} alt={player.name} />
                           <AvatarFallback>{player.name.slice(0, 2)}</AvatarFallback>
                         </Avatar>
                         
@@ -358,6 +382,9 @@ export default function Ranking() {
                           <p className="text-xs text-muted-foreground truncate">
                             {player.club}
                           </p>
+                          {player.country && (
+                            <p className="text-xs text-muted-foreground truncate">{player.country} • {player.age} ans</p>
+                          )}
                         </div>
                         
                         <div className="text-right">
@@ -386,16 +413,18 @@ export default function Ranking() {
                 <h3 className="font-bold text-gradient-gold">Statistiques des votes</h3>
                 <div className="grid grid-cols-3 gap-4 text-sm">
                   <div>
-                    <div className="font-bold text-lg">47.2K</div>
+                    <div className="font-bold text-lg">
+                      {currentRanking.reduce((sum, p) => sum + (p.votes || 0), 0).toLocaleString()}
+                    </div>
                     <div className="text-muted-foreground">Total votes</div>
                   </div>
                   <div>
-                    <div className="font-bold text-lg">156</div>
-                    <div className="text-muted-foreground">Pays</div>
+                    <div className="font-bold text-lg">{currentRanking.length}</div>
+                    <div className="text-muted-foreground">Candidats</div>
                   </div>
                   <div>
-                    <div className="font-bold text-lg">298</div>
-                    <div className="text-muted-foreground">Jours restants</div>
+                    <div className="font-bold text-lg">Oct 30</div>
+                    <div className="text-muted-foreground">Cérémonie</div>
                   </div>
                 </div>
               </CardContent>
