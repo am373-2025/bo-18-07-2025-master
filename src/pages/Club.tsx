@@ -957,7 +957,7 @@ export default function Club() {
       <main className="max-w-md mx-auto p-4 space-y-6 animate-fade-in">
         {/* Create/Edit Post */}
         {showCreatePost && (
-          <Card className="card-golden">
+          <Card className="card-golden overflow-hidden">
             <CardHeader>
               <h3 className="font-semibold text-gradient-gold">
                 {editingPost ? "Modifier la publication" : "Créer une publication"}
@@ -973,7 +973,7 @@ export default function Club() {
               
               {/* Aperçu du fichier sélectionné */}
               {selectedFile && (
-                <div className="border rounded-lg p-3 bg-muted/50">
+                <div className="border rounded-lg p-3 bg-muted/50 overflow-hidden">
                   <div className="flex items-center gap-3">
                     {selectedFileType === 'image' ? (
                       <Image className="w-5 h-5 text-blue-500" />
@@ -993,6 +993,7 @@ export default function Club() {
                         setSelectedFile(null);
                         setSelectedFileType(null);
                       }}
+                      className="flex-shrink-0"
                     >
                       ✕
                     </Button>
@@ -1003,14 +1004,14 @@ export default function Club() {
                     <img 
                       src={URL.createObjectURL(selectedFile)} 
                       alt="Aperçu"
-                      className="w-full h-32 object-cover rounded mt-2"
+                      className="w-full h-32 object-cover rounded mt-2 max-w-full"
                     />
                   )}
                   {selectedFileType === 'video' && (
                     <div className="relative mt-2">
                       <video 
                         src={URL.createObjectURL(selectedFile)} 
-                        className="w-full h-32 object-cover rounded"
+                        className="w-full h-32 object-cover rounded max-w-full"
                         controls
                       />
                     </div>
@@ -1019,11 +1020,12 @@ export default function Club() {
               )}
               
               <div className="flex items-center justify-between">
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => setShowMediaModal(true)}
+                    className="text-xs"
                   >
                     <Image className="w-4 h-4 mr-2" />
                     Photo/Vidéo
@@ -1032,6 +1034,7 @@ export default function Club() {
                     size="sm"
                     variant="outline"
                     onClick={() => setShowPollModal(true)}
+                    className="text-xs"
                   >
                     <BarChart3 className="w-4 h-4 mr-2" />
                     Sondage
@@ -1060,7 +1063,7 @@ export default function Club() {
         {/* Feed */}
         <div className="space-y-4">
           {posts.map((post, index) => (
-            <Card key={post.id} className="card-golden">
+            <Card key={post.id} className="card-golden overflow-hidden">
               <CardContent className="p-4 space-y-4">
                 {/* Header */}
                 <div className="flex items-start gap-3">
@@ -1108,20 +1111,21 @@ export default function Club() {
                     onShare={() => handleShare(post)}
                     isFavorited={post.isFavorite}
                     isReported={post.isReported}
+                    className="flex-shrink-0"
                   />
                 </div>
 
                 {/* Content */}
-                <div>
+                <div className="overflow-hidden">
                   {post.content && (
-                    <p className="text-sm leading-relaxed mb-3">{post.content}</p>
+                    <p className="text-sm leading-relaxed mb-3 break-words">{post.content}</p>
                   )}
                   
                   {post.image && (
                     <img 
                       src={post.image} 
                       alt="Post image"
-                      className="w-full rounded-lg mb-3"
+                      className="w-full rounded-lg mb-3 max-w-full h-auto"
                     />
                   )}
 
@@ -1129,7 +1133,7 @@ export default function Club() {
                     <div className="relative mb-3">
                       <video 
                         src={post.video} 
-                        className="w-full rounded-lg"
+                        className="w-full rounded-lg max-w-full h-auto"
                         controls
                         poster={post.image}
                       />
@@ -1140,7 +1144,7 @@ export default function Club() {
                   )}
 
                   {post.poll && (
-                    <div className="space-y-3 mb-3">
+                    <div className="space-y-3 mb-3 overflow-hidden">
                       <h4 className="font-semibold text-sm">{post.poll.question}</h4>
                       <div className="space-y-2">
                         {post.poll.options.map((option: any, optionIndex: number) => {
@@ -1151,11 +1155,11 @@ export default function Club() {
                             <Button
                               key={optionIndex}
                               variant={option.voted ? "default" : "outline"}
-                              className="w-full justify-between p-3 h-auto"
+                              className="w-full justify-between p-3 h-auto text-left"
                               onClick={() => handleVotePoll(post.id, optionIndex)}
                             >
-                              <span className="text-sm">{option.text}</span>
-                              <div className="flex items-center gap-2">
+                              <span className="text-sm truncate flex-1 mr-2">{option.text}</span>
+                              <div className="flex items-center gap-2 flex-shrink-0">
                                 <span className="text-xs">{option.votes}</span>
                                 <span className="text-xs text-muted-foreground">({percentage}%)</span>
                               </div>
@@ -1185,13 +1189,13 @@ export default function Club() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                <div className="flex items-center justify-between pt-2 border-t border-border/50 gap-2">
                   <div className="flex items-center gap-4">
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleLike(post.id)}
-                      className={`flex items-center gap-2 ${post.isLiked ? 'text-red-500' : 'text-muted-foreground'}`}
+                      className={`flex items-center gap-1 ${post.isLiked ? 'text-red-500' : 'text-muted-foreground'}`}
                     >
                       <Heart 
                         size={16} 
@@ -1204,7 +1208,7 @@ export default function Club() {
                       variant="ghost"
                       size="sm"
                       onClick={() => setShowCommentInput(showCommentInput === post.id ? null : post.id)}
-                      className="flex items-center gap-2 text-muted-foreground"
+                      className="flex items-center gap-1 text-muted-foreground"
                     >
                       <MessageCircle size={16} />
                       <span className="text-xs">{post.comments}</span>
@@ -1214,7 +1218,7 @@ export default function Club() {
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="text-muted-foreground"
+                    className="text-muted-foreground flex-shrink-0"
                     onClick={() => handleShare(post)}
                   >
                     <Share2 size={16} className="mr-1" />
@@ -1224,13 +1228,13 @@ export default function Club() {
 
                 {/* Quick Comment Input */}
                 {showCommentInput === post.id && (
-                  <div className="pt-3 border-t border-border/50">
+                  <div className="pt-3 border-t border-border/50 overflow-hidden">
                     <div className="flex gap-2">
                       <Avatar className="w-8 h-8">
                         <AvatarImage src={profile?.avatar} />
                         <AvatarFallback>{profile?.name?.[0] || 'U'}</AvatarFallback>
                       </Avatar>
-                      <div className="flex-1 flex gap-2">
+                      <div className="flex-1 flex gap-2 min-w-0">
                         <Input
                           placeholder="Écrivez un commentaire..."
                           value={commentInput}
@@ -1241,7 +1245,7 @@ export default function Club() {
                               setCommentInput("");
                             }
                           }}
-                          className="flex-1"
+                          className="flex-1 min-w-0"
                         />
                         <Button
                           size="sm"
@@ -1252,6 +1256,7 @@ export default function Club() {
                             }
                           }}
                           disabled={!commentInput.trim()}
+                          className="flex-shrink-0"
                         >
                           <Send className="w-4 h-4" />
                         </Button>
@@ -1260,16 +1265,16 @@ export default function Club() {
 
                     {/* Afficher les commentaires existants */}
                     {postComments[post.id] && postComments[post.id].length > 0 && (
-                      <div className="mt-3 space-y-2">
+                      <div className="mt-3 space-y-2 overflow-hidden">
                         {postComments[post.id].slice(0, 3).map((comment) => (
                           <div key={comment.id} className="flex gap-2 bg-muted/30 rounded-lg p-2">
                             <Avatar className="w-6 h-6">
                               <AvatarImage src={comment.user?.avatar} />
                               <AvatarFallback>{comment.user?.name?.[0] || 'U'}</AvatarFallback>
                             </Avatar>
-                            <div className="flex-1">
+                            <div className="flex-1 min-w-0">
                               <p className="text-xs font-medium">{comment.user?.name || 'Utilisateur'}</p>
-                              <p className="text-xs text-muted-foreground">{comment.content}</p>
+                              <p className="text-xs text-muted-foreground break-words">{comment.content}</p>
                             </div>
                           </div>
                         ))}
@@ -1293,7 +1298,7 @@ export default function Club() {
         </div>
 
         {/* Recommendations Section */}
-        <Card className="card-golden">
+        <Card className="card-golden overflow-hidden">
           <CardContent className="p-4 text-center space-y-3">
             <Trophy className="w-12 h-12 text-primary mx-auto animate-glow" />
             <h3 className="font-bold text-gradient-gold">
@@ -1302,7 +1307,7 @@ export default function Club() {
             <p className="text-sm text-muted-foreground">
               Partagez vos opinions sur le Ballon d'Or 2025 avec la communauté
             </p>
-            <div className="space-y-2 text-sm text-muted-foreground">
+            <div className="space-y-2 text-sm text-muted-foreground break-words">
               <p>• Créez des posts et sondages</p>
               <p>• Participez aux discussions</p>
               <p>• Suivez vos joueurs favoris</p>
