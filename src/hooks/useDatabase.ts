@@ -69,7 +69,12 @@ export function useDatabase<T extends SupabaseTable>(
           query = query.limit(options.limit);
         }
 
-        const { data, error, count } = await query;
+        const { data, error, count } = await Promise.race([
+          query,
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Supabase timeout')), 10000)
+          )
+        ]);
 
         if (error) throw error;
 
@@ -84,8 +89,7 @@ export function useDatabase<T extends SupabaseTable>(
         localStorage.setItem(storageKey, JSON.stringify(data));
 
       } catch (error: any) {
-        const errorMessage = handleSupabaseError(error);
-        console.warn(`Supabase error for ${table}:`, errorMessage);
+        console.warn(`Supabase error for ${table}:`, error.message || error);
         
         // Fallback vers localStorage
         const cached = localStorage.getItem(storageKey);
@@ -94,7 +98,7 @@ export function useDatabase<T extends SupabaseTable>(
         setState({
           data: fallbackData,
           loading: false,
-          error: `Mode hors ligne: ${errorMessage}`,
+          error: null, // Don't show error in offline mode
           count: fallbackData.length
         });
       }

@@ -29,7 +29,10 @@ export const checkSupabaseHealth = async (): Promise<boolean> => {
   if (!supabase) return false;
   
   try {
-    const { error } = await supabase.from('profiles').select('id').limit(1);
+    const { error } = await Promise.race([
+      supabase.from('profiles').select('id').limit(1),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+    ]);
     return !error;
   } catch {
     return false;
@@ -39,6 +42,11 @@ export const checkSupabaseHealth = async (): Promise<boolean> => {
 // Gestion des erreurs Supabase
 export const handleSupabaseError = (error: any): string => {
   if (!error) return 'Erreur inconnue';
+  
+  // Handle network errors
+  if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
+    return 'Connexion Supabase indisponible (mode hors ligne activé)';
+  }
   
   const errorMessages: Record<string, string> = {
     'PGRST301': 'Ressource non trouvée',
