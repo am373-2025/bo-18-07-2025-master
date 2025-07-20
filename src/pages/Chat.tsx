@@ -459,6 +459,8 @@ export default function Chat() {
         </div>
 
         {/* Groupes populaires */}
+        )}
+        
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-gradient-gold">
             Groupes populaires
@@ -514,6 +516,7 @@ export default function Chat() {
           </div>
         </div>
       </main>
+      )}
 
       {/* Modales */}
       <NewChatModal

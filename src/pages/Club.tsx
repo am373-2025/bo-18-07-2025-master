@@ -1045,6 +1045,10 @@ export default function Club() {
                           console.error('Preview video failed to load');
                           e.currentTarget.style.display = 'none';
                         }}
+                      />
+                    </div>
+                  )}
+                </div>
                 </div>
               )}
               
