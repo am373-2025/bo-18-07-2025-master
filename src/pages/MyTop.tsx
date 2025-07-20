@@ -240,7 +240,7 @@ function MyTop() {
   const CreateTopView = () => (
     <div className="min-h-screen bg-background">
       <header className="bg-card/95 backdrop-blur-md border-b border-border/50 sticky top-0 z-40">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between p-4 max-w-md mx-auto">
           <Button
             variant="ghost"
             size="sm"
