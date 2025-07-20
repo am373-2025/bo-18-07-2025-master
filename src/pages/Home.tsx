@@ -83,6 +83,7 @@ export default function Home() {
   const { toast } = useToast();
   const { isMobile, isTablet } = useResponsive();
   const { addVote, toggleFavorite } = useProfile();
+  const [dataInitialized, setDataInitialized] = useState(false);
   const {
     data: playersData,
     loading: loadingSupabaseTable,
@@ -114,10 +115,11 @@ export default function Home() {
 
   // Initialize with sample data if empty
   useEffect(() => {
-    if (!loadingSupabaseTable && playersData.length === 0) {
+    if (!loadingSupabaseTable && playersData.length === 0 && !dataInitialized) {
       insert(favoritePlayersData).catch(console.error);
+      setDataInitialized(true);
     }
-  }, [loadingSupabaseTable, playersData.length]);
+  }, [loadingSupabaseTable, playersData.length, dataInitialized, insert]);
 
   const handleViewDetails = (player: Player) => {
     setSelectedPlayer(player);

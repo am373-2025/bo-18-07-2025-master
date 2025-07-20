@@ -17,9 +17,13 @@ export const useAuth = () => {
 
   useEffect(() => {
     let mounted = true;
+    let initializing = false;
 
     // Get initial user
     const initializeAuth = async () => {
+      if (initializing) return;
+      initializing = true;
+      
       try {
         const user = await getCurrentUser();
         if (mounted) {
@@ -29,6 +33,8 @@ export const useAuth = () => {
         if (mounted) {
           setState(prev => ({ ...prev, loading: false }));
         }
+      } finally {
+        initializing = false;
       }
     };
 

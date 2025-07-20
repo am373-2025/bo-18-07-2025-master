@@ -188,17 +188,20 @@ export function useSupabaseTable<T = any>(
     }
   };
 
+  const refetch = React.useCallback(() => {
+    setLoading(true);
+    setError(null);
+    // Force re-fetch by changing a dependency
+  }, []);
+
   return { 
     data, 
     loading, 
     error, 
-    insert, 
-    update, 
-    remove, 
+    insert: React.useCallback(insert, [supabase, table, usingLocalStorage]), 
+    update: React.useCallback(update, [supabase, table, usingLocalStorage]), 
+    remove: React.useCallback(remove, [supabase, table, usingLocalStorage]), 
     usingLocalStorage,
-    refetch: () => {
-      setLoading(true);
-      // Re-run the effect by changing a dependency
-    }
+    refetch
   };
 }
