@@ -1,5 +1,5 @@
 import React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useToast } from "@/hooks/use-toast";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { CommentModal } from "@/components/ui/comment-modal";
 import { ShareModal } from "@/components/ui/share-modal";
@@ -15,13 +16,79 @@ import { LoginModal } from "@/components/ui/login-modal";
 import { CreatePollModal } from "@/components/ui/create-poll-modal";
 import { MediaUploadModal } from "@/components/ui/media-upload-modal";
 import { supabase } from "@/lib/supabaseClient";
-import { Heart, MessageCircle, Plus, Image, Video, BarChart3, Trophy, Users, Bookmark, Share2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { 
+  Heart, 
+  MessageCircle, 
+  Plus, 
+  Image, 
+  Video, 
+  BarChart3, 
+  Trophy, 
+  Users, 
+  Bookmark, 
+  Share2,
+  Edit3,
+  Play,
+  Send
+} from "lucide-react";
 
-// Données de test pour le feed
-const feedData = [
+// Interface pour les posts
+interface Post {
+  id: string;
+  user: {
+    id: string;
+    name: string;
+    avatar: string;
+    verified: boolean;
+  };
+  content: string;
+  image?: string;
+  video?: string;
+  poll?: {
+    question: string;
+    options: Array<{
+      text: string;
+      votes: number;
+      voted: boolean;
+    }>;
+  };
+  stats?: {
+    goals: number;
+    assists: number;
+    matches: number;
+  };
+  likes: number;
+  comments: number;
+  shares: number;
+  timestamp: string;
+  type: "post" | "poll" | "stats";
+  isLiked: boolean;
+  likedBy: string[];
+  isFavorite: boolean;
+  isReported: boolean;
+  canEdit?: boolean;
+}
+
+interface Comment {
+  id: string;
+  user_id: string;
+  post_id: string;
+  content: string;
+  likes: number;
+  created_at: string;
+  user?: {
+    name: string;
+    avatar: string;
+  };
+}
+
+// Données de test pour le feed initial
+const initialFeedData: Post[] = [
   {
-    id: "1",
+    id: "demo-1",
     user: {
+      id: "demo-user-1",
       name: "Alex Martin",
       avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop",
       verified: true
@@ -39,8 +106,9 @@ const feedData = [
     isReported: false
   },
   {
-    id: "2",
+    id: "demo-2",
     user: {
+      id: "demo-user-2",
       name: "Sophie Durand",
       avatar: "https://images.unsplash.com/photo-1494790108755-2616b612b786?w=100&h=100&fit=crop",
       verified: false
@@ -59,32 +127,9 @@ const feedData = [
     shares: 12,
     timestamp: "il y a 4h",
     type: "poll",
-    isLiked: true,
-    likedBy: ["currentUser"],
-    isFavorite: false,
-    isReported: false
-  },
-  {
-    id: "3",
-    user: {
-      name: "Marco Rodriguez",
-      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop",
-      verified: true
-    },
-    content: "Stats incroyables de Haaland cette saison ! 🤯",
-    stats: {
-      goals: 42,
-      assists: 15,
-      matches: 38
-    },
-    likes: 203,
-    comments: 56,
-    shares: 28,
-    timestamp: "il y a 6h",
-    type: "stats",
     isLiked: false,
     likedBy: [],
-    isFavorite: true,
+    isFavorite: false,
     isReported: false
   }
 ];
@@ -92,8 +137,9 @@ const feedData = [
 export default function Club() {
   const { user, isAuthenticated } = useAuth();
   const { profile, updateProfile } = useProfile();
-  const [posts, setPosts] = useState(feedData);
-  const [userPosts, setUserPosts] = useState([]);
+  const navigate = useNavigate();
+  const [posts, setPosts] = useState<Post[]>(initialFeedData);
+  const [userPosts, setUserPosts] = useState<any[]>([]);
   const [newPost, setNewPost] = useState("");
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [showComments, setShowComments] = useState(false);
@@ -104,11 +150,16 @@ export default function Club() {
   const [selectedPost, setSelectedPost] = useState<any>(null);
   const [editingPost, setEditingPost] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const currentUserId = user?.id || "currentUser";
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFileType, setSelectedFileType] = useState<'image' | 'video' | null>(null);
+  const [commentInput, setCommentInput] = useState("");
+  const [showCommentInput, setShowCommentInput] = useState<string | null>(null);
+  const [postComments, setPostComments] = useState<{ [key: string]: Comment[] }>({});
+  const currentUserId = user?.id || "guest-user";
   const { toast } = useToast();
 
   // Charger les posts utilisateur depuis Supabase
-  React.useEffect(() => {
+  useEffect(() => {
     const loadUserPosts = async () => {
       if (!user) return;
       
@@ -131,6 +182,11 @@ export default function Club() {
         }
       } catch (error) {
         console.error('Error loading user posts:', error);
+        toast({
+          title: "Erreur de chargement",
+          description: "Impossible de charger vos publications",
+          variant: "destructive"
+        });
       } finally {
         setLoading(false);
       }
@@ -141,18 +197,91 @@ export default function Club() {
     }
   }, [user, isAuthenticated]);
 
-  React.useEffect(() => {
+  // Charger les likes et commentaires pour chaque post
+  useEffect(() => {
+    const loadPostInteractions = async () => {
+      if (!supabase) return;
+
+      try {
+        // Charger les likes
+        const { data: likesData } = await supabase
+          .from('user_post_likes')
+          .select('post_id, user_id');
+
+        // Charger les commentaires avec profils utilisateur
+        const { data: commentsData } = await supabase
+          .from('user_post_comments')
+          .select(`
+            id,
+            user_id,
+            post_id,
+            content,
+            likes,
+            created_at,
+            profiles(name, avatar)
+          `)
+          .order('created_at', { ascending: true });
+
+        // Organiser les données
+        if (likesData) {
+          const likesByPost: { [key: string]: string[] } = {};
+          likesData.forEach(like => {
+            if (!likesByPost[like.post_id]) likesByPost[like.post_id] = [];
+            likesByPost[like.post_id].push(like.user_id);
+          });
+
+          // Mettre à jour les posts avec les likes
+          setPosts(prevPosts => prevPosts.map(post => ({
+            ...post,
+            likedBy: likesByPost[post.id] || [],
+            isLiked: likesByPost[post.id]?.includes(currentUserId) || false,
+            likes: (likesByPost[post.id] || []).length
+          })));
+        }
+
+        if (commentsData) {
+          const commentsByPost: { [key: string]: Comment[] } = {};
+          commentsData.forEach(comment => {
+            if (!commentsByPost[comment.post_id]) commentsByPost[comment.post_id] = [];
+            commentsByPost[comment.post_id].push({
+              ...comment,
+              user: comment.profiles ? {
+                name: comment.profiles.name,
+                avatar: comment.profiles.avatar
+              } : undefined
+            });
+          });
+          setPostComments(commentsByPost);
+
+          // Mettre à jour le nombre de commentaires
+          setPosts(prevPosts => prevPosts.map(post => ({
+            ...post,
+            comments: (commentsByPost[post.id] || []).length
+          })));
+        }
+      } catch (error) {
+        console.error('Error loading interactions:', error);
+      }
+    };
+
+    loadPostInteractions();
+  }, [currentUserId]);
+
+  // Convertir les posts Supabase en format d'affichage
+  useEffect(() => {
     if (userPosts.length > 0) {
-      const supabasePosts = userPosts.map(post => ({
+      const convertedPosts = userPosts.map(post => ({
         id: post.id,
         user: {
+          id: currentUserId,
           name: profile?.name || "Vous",
           avatar: profile?.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop",
           verified: false
         },
-        content: post.content,
+        content: post.content || "",
         image: post.image_url,
         video: post.video_url,
+        poll: post.poll_data,
         likes: post.likes || 0,
         comments: post.comments_count || 0,
         shares: post.shares || 0,
@@ -161,11 +290,13 @@ export default function Club() {
         isLiked: false,
         likedBy: [],
         isFavorite: false,
-        isReported: false
+        isReported: false,
+        canEdit: true
       }));
-      setPosts([...supabasePosts, ...feedData]);
+      
+      setPosts([...convertedPosts, ...initialFeedData]);
     }
-  }, [userPosts, profile]);
+  }, [userPosts, profile, currentUserId]);
 
   const requireAuth = (action: () => void) => {
     if (!isAuthenticated) {
@@ -180,7 +311,7 @@ export default function Club() {
     action();
   };
 
-  const handleLike = (postId: string) => {
+  const handleLike = async (postId: string) => {
     if (!isAuthenticated) {
       setShowLoginModal(true);
       return;
@@ -189,31 +320,141 @@ export default function Club() {
     const post = posts.find(p => p.id === postId);
     const hasLiked = post?.likedBy?.includes(currentUserId) || false;
     
-    setPosts(posts.map(post => {
-      if (post.id === postId) {
-        const newLikedBy = hasLiked 
-          ? post.likedBy.filter((id: string) => id !== currentUserId)
-          : [...(post.likedBy || []), currentUserId];
-        
-        return {
-          ...post,
-          isLiked: !hasLiked,
-          likes: hasLiked ? post.likes - 1 : post.likes + 1,
-          likedBy: newLikedBy
-        };
+    try {
+      if (supabase) {
+        if (hasLiked) {
+          // Retirer le like
+          await supabase
+            .from('user_post_likes')
+            .delete()
+            .eq('post_id', postId)
+            .eq('user_id', currentUserId);
+        } else {
+          // Ajouter le like
+          await supabase
+            .from('user_post_likes')
+            .insert([{ post_id: postId, user_id: currentUserId }]);
+        }
+
+        // Mettre à jour le compteur dans user_posts si c'est un post utilisateur
+        const userPost = userPosts.find(p => p.id === postId);
+        if (userPost) {
+          const newLikes = hasLiked ? (userPost.likes || 1) - 1 : (userPost.likes || 0) + 1;
+          await supabase
+            .from('user_posts')
+            .update({ likes: newLikes })
+            .eq('id', postId);
+        }
       }
-      return post;
-    }));
-    
-    toast({
-      title: !hasLiked ? "Post aimé ❤️" : "Like retiré",
-      description: !hasLiked ? "Vous avez aimé cette publication" : "Vous avez retiré votre like"
-    });
+
+      // Mettre à jour l'état local
+      setPosts(posts.map(post => {
+        if (post.id === postId) {
+          const newLikedBy = hasLiked 
+            ? post.likedBy.filter((id: string) => id !== currentUserId)
+            : [...(post.likedBy || []), currentUserId];
+          
+          return {
+            ...post,
+            isLiked: !hasLiked,
+            likes: hasLiked ? post.likes - 1 : post.likes + 1,
+            likedBy: newLikedBy
+          };
+        }
+        return post;
+      }));
+      
+      toast({
+        title: !hasLiked ? "Post aimé ❤️" : "Like retiré",
+        description: !hasLiked ? "Vous avez aimé cette publication" : "Vous avez retiré votre like"
+      });
+    } catch (error) {
+      console.error('Error handling like:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de sauvegarder votre like",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleComment = (post: any) => {
     setSelectedPost(post);
     setShowComments(true);
+  };
+
+  const handleAddComment = async (postId: string, content: string) => {
+    if (!isAuthenticated || !content.trim()) return;
+
+    try {
+      if (supabase) {
+        const { data, error } = await supabase
+          .from('user_post_comments')
+          .insert([{
+            user_id: currentUserId,
+            post_id: postId,
+            content: content.trim()
+          }])
+          .select(`
+            id,
+            user_id,
+            post_id,
+            content,
+            likes,
+            created_at,
+            profiles(name, avatar)
+          `)
+          .single();
+
+        if (error) throw error;
+
+        const newComment: Comment = {
+          ...data,
+          user: data.profiles ? {
+            name: data.profiles.name,
+            avatar: data.profiles.avatar
+          } : {
+            name: profile?.name || "Vous",
+            avatar: profile?.avatar || ""
+          }
+        };
+
+        // Mettre à jour les commentaires locaux
+        setPostComments(prev => ({
+          ...prev,
+          [postId]: [...(prev[postId] || []), newComment]
+        }));
+
+        // Mettre à jour le compteur dans user_posts
+        const userPost = userPosts.find(p => p.id === postId);
+        if (userPost) {
+          const newCount = (userPost.comments_count || 0) + 1;
+          await supabase
+            .from('user_posts')
+            .update({ comments_count: newCount })
+            .eq('id', postId);
+        }
+
+        // Mettre à jour l'état des posts
+        setPosts(posts.map(post => 
+          post.id === postId 
+            ? { ...post, comments: post.comments + 1 }
+            : post
+        ));
+
+        toast({
+          title: "Commentaire ajouté !",
+          description: "Votre commentaire a été publié avec succès."
+        });
+      }
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de publier votre commentaire",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleShare = (post: any) => {
@@ -232,28 +473,29 @@ export default function Club() {
     ));
   };
 
-  const handleVotePoll = (postId: string, optionIndex: number) => {
+  const handleVotePoll = async (postId: string, optionIndex: number) => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true);
+      return;
+    }
+
     setPosts(prevPosts => prevPosts.map(post => {
       if (post.id === postId && post.poll) {
         const currentVotedIndex = post.poll.options.findIndex((opt: any) => opt.voted);
         
-        // If clicking on the same option that was already voted, do nothing
         if (currentVotedIndex === optionIndex) {
           return post;
         }
         
         const updatedOptions = post.poll.options.map((option: any, index: number) => {
           if (currentVotedIndex !== -1) {
-            // Remove previous vote
             if (index === currentVotedIndex) {
               return { ...option, votes: option.votes - 1, voted: false };
             }
-            // Add new vote
             if (index === optionIndex) {
               return { ...option, votes: option.votes + 1, voted: true };
             }
           } else {
-            // First vote
             if (index === optionIndex) {
               return { ...option, votes: option.votes + 1, voted: true };
             }
@@ -284,93 +526,278 @@ export default function Club() {
       return;
     }
 
-    if (newPost.trim()) {
-      setLoading(true);
-      try {
-        let data = null;
-        
-        if (supabase) {
-          // Sauvegarder en Supabase
-          const { data: insertedData, error } = await supabase
-            .from('user_posts')
-            .insert([{
-              user_id: currentUserId,
-              content: newPost,
-              post_type: "text",
-              likes: 0,
-              comments_count: 0,
-              shares: 0
-            }])
-            .select()
-            .single();
-          
-          if (error) throw error;
-          data = insertedData;
-        } else {
-          // localStorage fallback
-          const stored = JSON.parse(localStorage.getItem('userPosts') || '[]');
-          data = {
-            id: crypto.randomUUID(),
-            user_id: currentUserId,
-            content: newPost,
-            post_type: "text",
-            likes: 0,
-            comments_count: 0,
-            shares: 0,
-            created_at: new Date().toISOString()
-          };
-          stored.push(data);
-          localStorage.setItem('userPosts', JSON.stringify(stored));
-        }
+    if (!newPost.trim() && !selectedFile) {
+      toast({
+        title: "Contenu requis",
+        description: "Veuillez ajouter du texte ou un média",
+        variant: "destructive"
+      });
+      return;
+    }
 
-        // Mettre à jour les stats du profil
-        if (profile) {
-          await updateProfile({
-            stats: {
-              ...profile.stats,
-              posts: profile.stats.posts + 1
-            }
-          });
+    setLoading(true);
+    try {
+      let mediaUrl = null;
+      
+      // Gérer l'upload de fichier
+      if (selectedFile) {
+        if (selectedFile.size > 10 * 1024 * 1024) { // 10MB max
+          throw new Error("Le fichier est trop volumineux (max 10MB)");
         }
-
-        const post: any = {
-          id: data?.id || Date.now().toString(),
-          user: {
-            name: profile?.name || "Vous",
-            avatar: profile?.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop",
-            verified: false
-          },
-          content: newPost,
-          likes: 0,
-          comments: 0,
-          shares: 0,
-          timestamp: "maintenant",
-          type: "post",
-          isLiked: false,
-          likedBy: [],
-          isFavorite: false,
-          isReported: false
-        };
         
-        setPosts([post, ...posts]);
-        setUserPosts([data, ...userPosts]);
-        setNewPost("");
-        setShowCreatePost(false);
-        
-        toast({
-          title: "Publication créée !",
-          description: "Votre post a été publié avec succès et sauvegardé."
-        });
-      } catch (error) {
-        console.error('Error creating post:', error);
-        toast({
-          title: "Erreur",
-          description: "Impossible de sauvegarder votre post. Vérifiez votre connexion.",
-          variant: "destructive"
-        });
-      } finally {
-        setLoading(false);
+        // Pour la démo, créer une URL blob
+        mediaUrl = URL.createObjectURL(selectedFile);
       }
+
+      let data = null;
+      
+      if (supabase) {
+        const insertData: any = {
+          user_id: currentUserId,
+          content: newPost.trim(),
+          post_type: selectedFileType === 'video' ? 'video' : selectedFileType === 'image' ? 'image' : 'text',
+          likes: 0,
+          comments_count: 0,
+          shares: 0
+        };
+
+        if (selectedFileType === 'image' && mediaUrl) {
+          insertData.image_url = mediaUrl;
+        } else if (selectedFileType === 'video' && mediaUrl) {
+          insertData.video_url = mediaUrl;
+        }
+        
+        const { data: insertedData, error } = await supabase
+          .from('user_posts')
+          .insert([insertData])
+          .select()
+          .single();
+        
+        if (error) throw error;
+        data = insertedData;
+      } else {
+        // localStorage fallback
+        const stored = JSON.parse(localStorage.getItem('userPosts') || '[]');
+        data = {
+          id: crypto.randomUUID(),
+          user_id: currentUserId,
+          content: newPost.trim(),
+          post_type: selectedFileType || "text",
+          likes: 0,
+          comments_count: 0,
+          shares: 0,
+          created_at: new Date().toISOString(),
+          image_url: selectedFileType === 'image' ? mediaUrl : null,
+          video_url: selectedFileType === 'video' ? mediaUrl : null
+        };
+        stored.push(data);
+        localStorage.setItem('userPosts', JSON.stringify(stored));
+      }
+
+      // Mettre à jour les stats du profil
+      if (profile && profile.stats) {
+        await updateProfile({
+          stats: {
+            ...profile.stats,
+            posts: profile.stats.posts + 1
+          }
+        });
+      }
+
+      const newPostData: Post = {
+        id: data?.id || Date.now().toString(),
+        user: {
+          id: currentUserId,
+          name: profile?.name || "Vous",
+          avatar: profile?.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop",
+          verified: false
+        },
+        content: newPost.trim(),
+        image: selectedFileType === 'image' ? mediaUrl : undefined,
+        video: selectedFileType === 'video' ? mediaUrl : undefined,
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        timestamp: "maintenant",
+        type: "post",
+        isLiked: false,
+        likedBy: [],
+        isFavorite: false,
+        isReported: false,
+        canEdit: true
+      };
+      
+      setPosts([newPostData, ...posts]);
+      setUserPosts([data, ...userPosts]);
+      
+      // Reset form
+      setNewPost("");
+      setSelectedFile(null);
+      setSelectedFileType(null);
+      setShowCreatePost(false);
+      setEditingPost(null);
+      
+      toast({
+        title: "Publication créée !",
+        description: `Votre ${selectedFileType === 'video' ? 'vidéo' : selectedFileType === 'image' ? 'photo' : 'post'} a été publié avec succès.`
+      });
+    } catch (error) {
+      console.error('Error creating post:', error);
+      toast({
+        title: "Erreur",
+        description: error instanceof Error ? error.message : "Impossible de publier votre contenu",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdatePost = async () => {
+    if (!isAuthenticated || !editingPost) {
+      return;
+    }
+
+    if (!newPost.trim() && !selectedFile) {
+      toast({
+        title: "Contenu requis",
+        description: "Veuillez ajouter du texte ou un média",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      let mediaUrl = editingPost.image || editingPost.video;
+      
+      // Gérer le nouveau fichier
+      if (selectedFile) {
+        if (selectedFile.size > 10 * 1024 * 1024) {
+          throw new Error("Le fichier est trop volumineux (max 10MB)");
+        }
+        mediaUrl = URL.createObjectURL(selectedFile);
+      }
+
+      if (supabase) {
+        const updateData: any = {
+          content: newPost.trim(),
+          updated_at: new Date().toISOString()
+        };
+
+        if (selectedFileType === 'image' && mediaUrl) {
+          updateData.image_url = mediaUrl;
+          updateData.video_url = null;
+        } else if (selectedFileType === 'video' && mediaUrl) {
+          updateData.video_url = mediaUrl;
+          updateData.image_url = null;
+        }
+        
+        const { error } = await supabase
+          .from('user_posts')
+          .update(updateData)
+          .eq('id', editingPost.id);
+        
+        if (error) throw error;
+      } else {
+        // localStorage fallback
+        const stored = JSON.parse(localStorage.getItem('userPosts') || '[]');
+        const updated = stored.map((post: any) => 
+          post.id === editingPost.id 
+            ? { 
+                ...post, 
+                content: newPost.trim(), 
+                updated_at: new Date().toISOString(),
+                image_url: selectedFileType === 'image' ? mediaUrl : post.image_url,
+                video_url: selectedFileType === 'video' ? mediaUrl : post.video_url
+              }
+            : post
+        );
+        localStorage.setItem('userPosts', JSON.stringify(updated));
+      }
+
+      // Mettre à jour l'état local
+      setPosts(posts.map(p => 
+        p.id === editingPost.id 
+          ? { 
+              ...p, 
+              content: newPost.trim(),
+              image: selectedFileType === 'image' ? mediaUrl : p.image,
+              video: selectedFileType === 'video' ? mediaUrl : p.video
+            }
+          : p
+      ));
+      
+      setUserPosts(userPosts.map(p => 
+        p.id === editingPost.id 
+          ? { 
+              ...p, 
+              content: newPost.trim(), 
+              updated_at: new Date().toISOString(),
+              image_url: selectedFileType === 'image' ? mediaUrl : p.image_url,
+              video_url: selectedFileType === 'video' ? mediaUrl : p.video_url
+            }
+          : p
+      ));
+      
+      // Reset form
+      setEditingPost(null);
+      setNewPost("");
+      setSelectedFile(null);
+      setSelectedFileType(null);
+      setShowCreatePost(false);
+      
+      toast({
+        title: "Post modifié !",
+        description: "Votre publication a été mise à jour avec succès."
+      });
+    } catch (error) {
+      console.error('Error updating post:', error);
+      toast({
+        title: "Erreur",
+        description: error instanceof Error ? error.message : "Impossible de modifier votre post",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditPost = (post: Post) => {
+    setEditingPost(post);
+    setNewPost(post.content);
+    setShowCreatePost(true);
+  };
+
+  const handleDeletePost = async (postId: string) => {
+    if (!isAuthenticated) return;
+
+    try {
+      if (supabase) {
+        await supabase
+          .from('user_posts')
+          .delete()
+          .eq('id', postId);
+      } else {
+        const stored = JSON.parse(localStorage.getItem('userPosts') || '[]');
+        const updated = stored.filter((post: any) => post.id !== postId);
+        localStorage.setItem('userPosts', JSON.stringify(updated));
+      }
+
+      setPosts(posts.filter(p => p.id !== postId));
+      setUserPosts(userPosts.filter(p => p.id !== postId));
+      
+      toast({
+        title: "Post supprimé",
+        description: "Votre publication a été supprimée avec succès."
+      });
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de supprimer le post",
+        variant: "destructive"
+      });
     }
   };
 
@@ -385,7 +812,6 @@ export default function Club() {
       let data = null;
       
       if (supabase) {
-        // Sauvegarder en Supabase
         const { data: insertedData, error } = await supabase
           .from('user_posts')
           .insert([{
@@ -406,7 +832,6 @@ export default function Club() {
         if (error) throw error;
         data = insertedData;
       } else {
-        // localStorage fallback
         const stored = JSON.parse(localStorage.getItem('userPosts') || '[]');
         data = {
           id: crypto.randomUUID(),
@@ -426,9 +851,10 @@ export default function Club() {
         localStorage.setItem('userPosts', JSON.stringify(stored));
       }
 
-      const post = {
+      const post: Post = {
         id: data?.id || Date.now().toString(),
         user: {
+          id: currentUserId,
           name: profile?.name || "Vous",
           avatar: profile?.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop",
           verified: false
@@ -443,20 +869,22 @@ export default function Club() {
         isLiked: false,
         likedBy: [],
         isFavorite: false,
-        isReported: false
-      } as any;
+        isReported: false,
+        canEdit: true
+      };
       
       setPosts([post, ...posts]);
       setUserPosts([data, ...userPosts]);
+      
       toast({
         title: "Sondage créé !",
-        description: "Votre sondage a été publié avec succès et sauvegardé."
+        description: "Votre sondage a été publié avec succès."
       });
     } catch (error) {
       console.error('Error creating poll:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de sauvegarder votre sondage.",
+        description: "Impossible de créer le sondage",
         variant: "destructive"
       });
     } finally {
@@ -464,190 +892,44 @@ export default function Club() {
     }
   };
 
-  const handleMediaUpload = async (file: File, mediaType: 'image' | 'video') => {
-    if (!isAuthenticated) {
-      setShowLoginModal(true);
-      return;
-    }
-
-    // Créer une URL temporaire pour prévisualiser le fichier
-    const mediaUrl = URL.createObjectURL(file);
-
-    setLoading(true);
-    try {
-      let data = null;
-      
-      if (supabase) {
-        // Sauvegarder en Supabase
-        const insertData = {
-          user_id: currentUserId,
-          content: newPost || "",
-          post_type: "text",
-          likes: 0,
-          comments_count: 0,
-          shares: 0,
-          ...(mediaType === 'image' ? { image_url: mediaUrl } : { video_url: mediaUrl })
-        };
-        
-        const { data: insertedData, error } = await supabase
-          .from('user_posts')
-          .insert([insertData])
-          .select()
-          .single();
-        
-        if (error) throw error;
-        data = insertedData;
-      } else {
-        // localStorage fallback
-        const stored = JSON.parse(localStorage.getItem('userPosts') || '[]');
-        data = {
-          id: crypto.randomUUID(),
-          user_id: currentUserId,
-          content: newPost || "",
-          post_type: "text",
-          likes: 0,
-          comments_count: 0,
-          shares: 0,
-          created_at: new Date().toISOString(),
-          ...(mediaType === 'image' ? { image_url: mediaUrl } : { video_url: mediaUrl })
-        };
-        stored.push(data);
-        localStorage.setItem('userPosts', JSON.stringify(stored));
-      }
-
-      const postData = {
-        id: data?.id || Date.now().toString(),
-        user: {
-          name: profile?.name || "Vous",
-          avatar: profile?.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop",
-          verified: false
-        },
-        content: newPost || "",
-        likes: 0,
-        comments: 0,
-        shares: 0,
-        timestamp: "maintenant",
-        type: "post",
-        isLiked: false,
-        likedBy: [],
-        isFavorite: false,
-        isReported: false
-      };
-
-      const post = mediaType === 'image' 
-        ? { ...postData, image: mediaUrl }
-        : { ...postData, video: mediaUrl };
-      
-      setPosts([post as any, ...posts]);
-      setUserPosts([data, ...userPosts]);
-      setNewPost("");
-      setShowCreatePost(false);
-      
+  const handleMediaUpload = (file: File, mediaType: 'image' | 'video') => {
+    if (file.size > 10 * 1024 * 1024) { // 10MB max
       toast({
-        title: "Média publié !",
-        description: `Votre ${mediaType === 'image' ? 'photo' : 'vidéo'} a été publié avec succès et sauvegardé.`
-      });
-    } catch (error) {
-      console.error('Error uploading media:', error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de sauvegarder votre média.",
+        title: "Fichier trop volumineux",
+        description: "Le fichier ne doit pas dépasser 10MB",
         variant: "destructive"
       });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEditPost = (post: any) => {
-    setEditingPost(post);
-    setNewPost(post.content);
-    setShowCreatePost(true);
-  };
-
-  const handleUpdatePost = async () => {
-    if (!isAuthenticated) {
-      setShowLoginModal(true);
       return;
     }
 
-    if (editingPost && newPost.trim()) {
-      setLoading(true);
-      try {
-        if (supabase) {
-          // Mettre à jour en Supabase
-          const { error } = await supabase
-            .from('user_posts')
-            .update({
-              content: newPost,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', editingPost.id);
-          
-          if (error) throw error;
-        } else {
-          // localStorage fallback
-          const stored = JSON.parse(localStorage.getItem('userPosts') || '[]');
-          const updated = stored.map((post: any) => 
-            post.id === editingPost.id 
-              ? { ...post, content: newPost, updated_at: new Date().toISOString() }
-              : post
-          );
-          localStorage.setItem('userPosts', JSON.stringify(updated));
-        }
+    setSelectedFile(file);
+    setSelectedFileType(mediaType);
+    setShowMediaModal(false);
+    
+    toast({
+      title: `${mediaType === 'image' ? 'Photo' : 'Vidéo'} sélectionnée`,
+      description: "Ajoutez du texte et publiez votre contenu"
+    });
+  };
 
-        setPosts(posts.map(p => 
-          p.id === editingPost.id 
-            ? { ...p, content: newPost }
-            : p
-        ));
-        
-        setUserPosts(userPosts.map(p => 
-          p.id === editingPost.id 
-            ? { ...p, content: newPost, updated_at: new Date().toISOString() }
-            : p
-        ));
-        
-        setEditingPost(null);
-        setNewPost("");
-        setShowCreatePost(false);
-        toast({
-          title: "Post modifié !",
-          description: "Votre publication a été mise à jour et sauvegardée."
-        });
-      } catch (error) {
-        console.error('Error updating post:', error);
-        toast({
-          title: "Erreur",
-          description: "Impossible de mettre à jour votre post.",
-          variant: "destructive"
-        });
-      } finally {
-        setLoading(false);
-      }
+  const handleUserClick = (userId: string) => {
+    if (userId === currentUserId) {
+      navigate('/profile');
+    } else {
+      // Pour les autres utilisateurs, on pourrait naviguer vers leur profil public
+      toast({
+        title: "Profil utilisateur",
+        description: "Navigation vers les profils publics bientôt disponible"
+      });
     }
   };
 
-  const handleFavoritePost = async (postId: string) => {
-    if (!isAuthenticated) {
-      setShowLoginModal(true);
-      return;
-    }
-
-    try {
-      const post = posts.find(p => p.id === postId);
-      toast({
-        title: "Favori ajouté",
-        description: `Post de ${post?.user.name} ajouté aux favoris`
-      });
-    } catch (error) {
-      console.error('Error handling favorite post:', error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de gérer les favoris.",
-        variant: "destructive"
-      });
-    }
+  const resetCreateForm = () => {
+    setNewPost("");
+    setSelectedFile(null);
+    setSelectedFileType(null);
+    setShowCreatePost(false);
+    setEditingPost(null);
   };
 
   return (
@@ -673,7 +955,7 @@ export default function Club() {
       </header>
 
       <main className="max-w-md mx-auto p-4 space-y-6 animate-fade-in">
-        {/* Create Post */}
+        {/* Create/Edit Post */}
         {showCreatePost && (
           <Card className="card-golden">
             <CardHeader>
@@ -688,6 +970,54 @@ export default function Club() {
                 onChange={(e) => setNewPost(e.target.value)}
                 className="min-h-[100px]"
               />
+              
+              {/* Aperçu du fichier sélectionné */}
+              {selectedFile && (
+                <div className="border rounded-lg p-3 bg-muted/50">
+                  <div className="flex items-center gap-3">
+                    {selectedFileType === 'image' ? (
+                      <Image className="w-5 h-5 text-blue-500" />
+                    ) : (
+                      <Video className="w-5 h-5 text-red-500" />
+                    )}
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{selectedFile.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {(selectedFile.size / 1024 / 1024).toFixed(1)} MB
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setSelectedFile(null);
+                        setSelectedFileType(null);
+                      }}
+                    >
+                      ✕
+                    </Button>
+                  </div>
+                  
+                  {/* Aperçu image/vidéo */}
+                  {selectedFileType === 'image' && (
+                    <img 
+                      src={URL.createObjectURL(selectedFile)} 
+                      alt="Aperçu"
+                      className="w-full h-32 object-cover rounded mt-2"
+                    />
+                  )}
+                  {selectedFileType === 'video' && (
+                    <div className="relative mt-2">
+                      <video 
+                        src={URL.createObjectURL(selectedFile)} 
+                        className="w-full h-32 object-cover rounded"
+                        controls
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+              
               <div className="flex items-center justify-between">
                 <div className="flex gap-2">
                   <Button
@@ -696,7 +1026,7 @@ export default function Club() {
                     onClick={() => setShowMediaModal(true)}
                   >
                     <Image className="w-4 h-4 mr-2" />
-                    Photo
+                    Photo/Vidéo
                   </Button>
                   <Button
                     size="sm"
@@ -710,18 +1040,14 @@ export default function Club() {
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      setShowCreatePost(false);
-                      setEditingPost(null);
-                      setNewPost("");
-                    }}
+                    onClick={resetCreateForm}
                   >
                     Annuler
                   </Button>
                   <Button
                     className="btn-golden"
                     onClick={editingPost ? handleUpdatePost : handleCreatePost}
-                    disabled={!newPost.trim() || loading}
+                    disabled={(!newPost.trim() && !selectedFile) || loading}
                   >
                     {loading ? "..." : (editingPost ? "Modifier" : "Publier")}
                   </Button>
@@ -738,13 +1064,21 @@ export default function Club() {
               <CardContent className="p-4 space-y-4">
                 {/* Header */}
                 <div className="flex items-start gap-3">
-                  <Avatar className="w-10 h-10">
+                  <Avatar 
+                    className="w-10 h-10 cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
+                    onClick={() => handleUserClick(post.user.id)}
+                  >
                     <AvatarImage src={post.user.avatar} />
                     <AvatarFallback>{post.user.name[0]}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-sm">{post.user.name}</h3>
+                      <h3 
+                        className="font-semibold text-sm cursor-pointer hover:text-primary transition-colors"
+                        onClick={() => handleUserClick(post.user.id)}
+                      >
+                        {post.user.name}
+                      </h3>
                       {post.user.verified && (
                         <Badge className="bg-primary text-primary-foreground text-xs px-2 py-0.5">
                           <Trophy className="w-3 h-3 mr-1" />
@@ -756,16 +1090,15 @@ export default function Club() {
                   </div>
                   <PostActionsMenu
                     postId={post.id}
-                    isOwnPost={post.user.name === "Vous"}
+                    isOwnPost={post.canEdit || false}
                     onEdit={() => handleEditPost(post)}
-                    onDelete={() => {
-                      setPosts(posts.filter(p => p.id !== post.id));
+                    onDelete={() => handleDeletePost(post.id)}
+                    onFavorite={() => {
                       toast({
-                        title: "Post supprimé",
-                        description: "Votre publication a été supprimée."
+                        title: "Favoris",
+                        description: "Post ajouté aux favoris"
                       });
                     }}
-                    onFavorite={() => handleFavoritePost(post.id)}
                     onReport={() => {
                       toast({
                         title: "Post signalé",
@@ -792,12 +1125,26 @@ export default function Club() {
                     />
                   )}
 
+                  {post.video && (
+                    <div className="relative mb-3">
+                      <video 
+                        src={post.video} 
+                        className="w-full rounded-lg"
+                        controls
+                        poster={post.image}
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <Play className="w-12 h-12 text-white/80 drop-shadow-lg" />
+                      </div>
+                    </div>
+                  )}
+
                   {post.poll && (
                     <div className="space-y-3 mb-3">
                       <h4 className="font-semibold text-sm">{post.poll.question}</h4>
                       <div className="space-y-2">
                         {post.poll.options.map((option: any, optionIndex: number) => {
-                          const totalVotes = post.poll.options.reduce((sum: number, opt: any) => sum + opt.votes, 0);
+                          const totalVotes = post.poll!.options.reduce((sum: number, opt: any) => sum + opt.votes, 0);
                           const percentage = totalVotes > 0 ? Math.round((option.votes / totalVotes) * 100) : 0;
                           
                           return (
@@ -856,7 +1203,7 @@ export default function Club() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleComment(post)}
+                      onClick={() => setShowCommentInput(showCommentInput === post.id ? null : post.id)}
                       className="flex items-center gap-2 text-muted-foreground"
                     >
                       <MessageCircle size={16} />
@@ -874,6 +1221,72 @@ export default function Club() {
                     <span className="text-xs">{post.shares}</span>
                   </Button>
                 </div>
+
+                {/* Quick Comment Input */}
+                {showCommentInput === post.id && (
+                  <div className="pt-3 border-t border-border/50">
+                    <div className="flex gap-2">
+                      <Avatar className="w-8 h-8">
+                        <AvatarImage src={profile?.avatar} />
+                        <AvatarFallback>{profile?.name?.[0] || 'U'}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 flex gap-2">
+                        <Input
+                          placeholder="Écrivez un commentaire..."
+                          value={commentInput}
+                          onChange={(e) => setCommentInput(e.target.value)}
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter' && commentInput.trim()) {
+                              handleAddComment(post.id, commentInput);
+                              setCommentInput("");
+                            }
+                          }}
+                          className="flex-1"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            if (commentInput.trim()) {
+                              handleAddComment(post.id, commentInput);
+                              setCommentInput("");
+                            }
+                          }}
+                          disabled={!commentInput.trim()}
+                        >
+                          <Send className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Afficher les commentaires existants */}
+                    {postComments[post.id] && postComments[post.id].length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {postComments[post.id].slice(0, 3).map((comment) => (
+                          <div key={comment.id} className="flex gap-2 bg-muted/30 rounded-lg p-2">
+                            <Avatar className="w-6 h-6">
+                              <AvatarImage src={comment.user?.avatar} />
+                              <AvatarFallback>{comment.user?.name?.[0] || 'U'}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1">
+                              <p className="text-xs font-medium">{comment.user?.name || 'Utilisateur'}</p>
+                              <p className="text-xs text-muted-foreground">{comment.content}</p>
+                            </div>
+                          </div>
+                        ))}
+                        {postComments[post.id].length > 3 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleComment(post)}
+                            className="text-xs"
+                          >
+                            Voir tous les {postComments[post.id].length} commentaires
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
