@@ -15,7 +15,7 @@ import { LoginModal } from "@/components/ui/login-modal";
 import { CreatePollModal } from "@/components/ui/create-poll-modal";
 import { MediaUploadModal } from "@/components/ui/media-upload-modal";
 import { supabase } from "@/lib/supabaseClient";
-import { Heart, MessageCircle, Plus, Image, Video, BarChart3, Trophy, Users, Bookmark } from "lucide-react";
+import { Heart, MessageCircle, Plus, Image, Video, BarChart3, Trophy, Users, Bookmark, Share2 } from "lucide-react";
 
 // Données de test pour le feed
 const feedData = [
@@ -636,6 +636,10 @@ export default function Club() {
 
     try {
       const post = posts.find(p => p.id === postId);
+      toast({
+        title: "Favori ajouté",
+        description: `Post de ${post?.user.name} ajouté aux favoris`
+      });
     } catch (error) {
       console.error('Error handling favorite post:', error);
       toast({
@@ -644,5 +648,294 @@ export default function Club() {
         variant: "destructive"
       });
     }
-  }
+  };
+
+  return (
+    <div className="min-h-screen bg-background pb-20">
+      {/* Header */}
+      <header className="bg-card/95 backdrop-blur-md border-b border-border/50 sticky top-0 z-40">
+        <div className="flex items-center justify-between p-4 max-w-md mx-auto">
+          <div className="flex items-center gap-3">
+            <Users className="w-8 h-8 text-primary animate-float" />
+            <h1 className="text-2xl font-bold text-gradient-gold">Club</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button 
+              size="sm" 
+              className="btn-golden" 
+              onClick={() => requireAuth(() => setShowCreatePost(true))}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Poster
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-md mx-auto p-4 space-y-6 animate-fade-in">
+        {/* Create Post */}
+        {showCreatePost && (
+          <Card className="card-golden">
+            <CardHeader>
+              <h3 className="font-semibold text-gradient-gold">
+                {editingPost ? "Modifier la publication" : "Créer une publication"}
+              </h3>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Textarea
+                placeholder="Quoi de neuf dans le monde du football ?"
+                value={newPost}
+                onChange={(e) => setNewPost(e.target.value)}
+                className="min-h-[100px]"
+              />
+              <div className="flex items-center justify-between">
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowMediaModal(true)}
+                  >
+                    <Image className="w-4 h-4 mr-2" />
+                    Photo
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowPollModal(true)}
+                  >
+                    <BarChart3 className="w-4 h-4 mr-2" />
+                    Sondage
+                  </Button>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowCreatePost(false);
+                      setEditingPost(null);
+                      setNewPost("");
+                    }}
+                  >
+                    Annuler
+                  </Button>
+                  <Button
+                    className="btn-golden"
+                    onClick={editingPost ? handleUpdatePost : handleCreatePost}
+                    disabled={!newPost.trim() || loading}
+                  >
+                    {loading ? "..." : (editingPost ? "Modifier" : "Publier")}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Feed */}
+        <div className="space-y-4">
+          {posts.map((post, index) => (
+            <Card key={post.id} className="card-golden">
+              <CardContent className="p-4 space-y-4">
+                {/* Header */}
+                <div className="flex items-start gap-3">
+                  <Avatar className="w-10 h-10">
+                    <AvatarImage src={post.user.avatar} />
+                    <AvatarFallback>{post.user.name[0]}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-sm">{post.user.name}</h3>
+                      {post.user.verified && (
+                        <Badge className="bg-primary text-primary-foreground text-xs px-2 py-0.5">
+                          <Trophy className="w-3 h-3 mr-1" />
+                          Vérifié
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{post.timestamp}</p>
+                  </div>
+                  <PostActionsMenu
+                    postId={post.id}
+                    isOwnPost={post.user.name === "Vous"}
+                    onEdit={() => handleEditPost(post)}
+                    onDelete={() => {
+                      setPosts(posts.filter(p => p.id !== post.id));
+                      toast({
+                        title: "Post supprimé",
+                        description: "Votre publication a été supprimée."
+                      });
+                    }}
+                    onFavorite={() => handleFavoritePost(post.id)}
+                    onReport={() => {
+                      toast({
+                        title: "Post signalé",
+                        description: "Cette publication a été signalée aux modérateurs."
+                      });
+                    }}
+                    onShare={() => handleShare(post)}
+                    isFavorited={post.isFavorite}
+                    isReported={post.isReported}
+                  />
+                </div>
+
+                {/* Content */}
+                <div>
+                  {post.content && (
+                    <p className="text-sm leading-relaxed mb-3">{post.content}</p>
+                  )}
+                  
+                  {post.image && (
+                    <img 
+                      src={post.image} 
+                      alt="Post image"
+                      className="w-full rounded-lg mb-3"
+                    />
+                  )}
+
+                  {post.poll && (
+                    <div className="space-y-3 mb-3">
+                      <h4 className="font-semibold text-sm">{post.poll.question}</h4>
+                      <div className="space-y-2">
+                        {post.poll.options.map((option: any, optionIndex: number) => {
+                          const totalVotes = post.poll.options.reduce((sum: number, opt: any) => sum + opt.votes, 0);
+                          const percentage = totalVotes > 0 ? Math.round((option.votes / totalVotes) * 100) : 0;
+                          
+                          return (
+                            <Button
+                              key={optionIndex}
+                              variant={option.voted ? "default" : "outline"}
+                              className="w-full justify-between p-3 h-auto"
+                              onClick={() => handleVotePoll(post.id, optionIndex)}
+                            >
+                              <span className="text-sm">{option.text}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs">{option.votes}</span>
+                                <span className="text-xs text-muted-foreground">({percentage}%)</span>
+                              </div>
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {post.stats && (
+                    <div className="grid grid-cols-3 gap-3 mb-3">
+                      <div className="text-center bg-muted/50 rounded-lg p-3">
+                        <div className="text-lg font-bold text-primary">{post.stats.goals}</div>
+                        <div className="text-xs text-muted-foreground">Buts</div>
+                      </div>
+                      <div className="text-center bg-muted/50 rounded-lg p-3">
+                        <div className="text-lg font-bold text-primary">{post.stats.assists}</div>
+                        <div className="text-xs text-muted-foreground">Passes</div>
+                      </div>
+                      <div className="text-center bg-muted/50 rounded-lg p-3">
+                        <div className="text-lg font-bold text-primary">{post.stats.matches}</div>
+                        <div className="text-xs text-muted-foreground">Matchs</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                  <div className="flex items-center gap-4">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleLike(post.id)}
+                      className={`flex items-center gap-2 ${post.isLiked ? 'text-red-500' : 'text-muted-foreground'}`}
+                    >
+                      <Heart 
+                        size={16} 
+                        className={post.isLiked ? 'fill-current' : ''}
+                      />
+                      <span className="text-xs">{post.likes}</span>
+                    </Button>
+                    
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleComment(post)}
+                      className="flex items-center gap-2 text-muted-foreground"
+                    >
+                      <MessageCircle size={16} />
+                      <span className="text-xs">{post.comments}</span>
+                    </Button>
+                  </div>
+
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="text-muted-foreground"
+                    onClick={() => handleShare(post)}
+                  >
+                    <Share2 size={16} className="mr-1" />
+                    <span className="text-xs">{post.shares}</span>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Recommendations Section */}
+        <Card className="card-golden">
+          <CardContent className="p-4 text-center space-y-3">
+            <Trophy className="w-12 h-12 text-primary mx-auto animate-glow" />
+            <h3 className="font-bold text-gradient-gold">
+              Rejoignez la conversation !
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Partagez vos opinions sur le Ballon d'Or 2025 avec la communauté
+            </p>
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p>• Créez des posts et sondages</p>
+              <p>• Participez aux discussions</p>
+              <p>• Suivez vos joueurs favoris</p>
+              <p>• Votez pour les meilleurs contenus</p>
+            </div>
+          </CardContent>
+        </Card>
+      </main>
+
+      {/* Comment Modal */}
+      {selectedPost && (
+        <CommentModal 
+          isOpen={showComments}
+          onClose={() => setShowComments(false)}
+          postId={selectedPost.id || selectedPost}
+        />
+      )}
+
+      {/* Share Modal */}
+      {selectedPost && (
+        <ShareModal
+          isOpen={showShare}
+          onClose={() => setShowShare(false)}
+          content={selectedPost}
+        />
+      )}
+
+      {/* Login Modal */}
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+      />
+
+      {/* Create Poll Modal */}
+      <CreatePollModal
+        isOpen={showPollModal}
+        onClose={() => setShowPollModal(false)}
+        onCreatePoll={handleCreatePoll}
+      />
+
+      {/* Media Upload Modal */}
+      <MediaUploadModal
+        isOpen={showMediaModal}
+        onClose={() => setShowMediaModal(false)}
+        onUpload={handleMediaUpload}
+      />
+    </div>
+  );
 }
