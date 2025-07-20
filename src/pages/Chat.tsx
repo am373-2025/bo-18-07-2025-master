@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { useSupabaseTable } from "@/hooks/useSupabaseTable";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -10,6 +12,7 @@ import { MessageCircle, Send, Plus, Search, MoreVertical, Camera, Smile, Users, 
 import { MediaUploadModal } from "@/components/ui/media-upload-modal";
 import { MembersModal } from "@/components/ui/members-modal";
 import { GroupMediaModal } from "@/components/ui/group-media-modal";
+import { supabase } from "@/lib/supabaseClient";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,82 +20,37 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-// Données de test pour les conversations
-const conversationsData = [
-  {
-    id: "1",
-    type: "private",
-    name: "Alex Martin",
-    avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop",
-    lastMessage: "Mbappé va gagner c'est sûr !",
-    timestamp: "14:32",
-    unread: 2,
-    online: true
-  },
-  {
-    id: "2",
-    type: "group",
-    name: "🏆 Fans Real Madrid",
-    avatar: "https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?w=100&h=100&fit=crop",
-    lastMessage: "Sophie: Les stats de Bellingham sont folles",
-    timestamp: "13:45",
-    unread: 5,
-    participants: 47
-  },
-  {
-    id: "3",
-    type: "private",
-    name: "Sophie Durand",
-    avatar: "https://images.unsplash.com/photo-1494790108755-2616b612b786?w=100&h=100&fit=crop",
-    lastMessage: "Tu as vu le dernier match ?",
-    timestamp: "12:20",
-    unread: 0,
-    online: false
-  },
-  {
-    id: "4",
-    type: "group",
-    name: "⚽ Débat Ballon d'Or",
-    avatar: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=100&h=100&fit=crop",
-    lastMessage: "Marco: Haaland mérite sa place",
-    timestamp: "11:55",
-    unread: 12,
-    participants: 156
-  }
-];
+interface Message {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  content: string;
+  is_read: boolean;
+  created_at: string;
+  sender?: {
+    name: string;
+    avatar: string;
+  };
+}
 
-// Messages pour une conversation
-const messagesData = [
-  {
-    id: "1",
-    senderId: "other",
-    senderName: "Alex Martin",
-    content: "Salut ! Tu as vu les dernières stats de Mbappé ?",
-    timestamp: "14:30",
-    status: "read"
-  },
-  {
-    id: "2",
-    senderId: "me",
-    content: "Oui ! Il est vraiment en forme cette saison",
-    timestamp: "14:31",
-    status: "read"
-  },
-  {
-    id: "3",
-    senderId: "other",
-    senderName: "Alex Martin",
-    content: "Mbappé va gagner c'est sûr !",
-    timestamp: "14:32",
-    status: "delivered"
-  }
-];
+interface Conversation {
+  id: string;
+  type: 'private' | 'group';
+  name: string;
+  avatar: string;
+  lastMessage: string;
+  timestamp: string;
+  unread: number;
+  online?: boolean;
+  participants?: number;
+}
 
 export default function Chat() {
+  const { user, isAuthenticated } = useAuth();
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
   const [message, setMessage] = useState("");
-  const [conversations, setConversations] = useState(conversationsData);
-  const [messages, setMessages] = useState(messagesData);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [showNewChatModal, setShowNewChatModal] = useState(false);
   const [showMediaModal, setShowMediaModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
@@ -100,21 +58,119 @@ export default function Chat() {
   const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
 
+  // Charger les messages depuis Supabase
+  const { data: userMessages, loading: messagesLoading } = useSupabaseTable<Message>(
+    'user_messages',
+    user ? { receiver_id: user.id } : undefined
+  );
+
+  // Charger les conversations depuis les messages
+  useEffect(() => {
+    if (!userMessages || !user) return;
+
+    const conversationMap = new Map<string, Conversation>();
+    
+    userMessages.forEach(msg => {
+      const otherUserId = msg.sender_id === user.id ? msg.receiver_id : msg.sender_id;
+      
+      if (!conversationMap.has(otherUserId)) {
+        conversationMap.set(otherUserId, {
+          id: otherUserId,
+          type: 'private',
+          name: msg.sender?.name || 'Utilisateur',
+          avatar: msg.sender?.avatar || '/placeholder.svg',
+          lastMessage: msg.content,
+          timestamp: new Date(msg.created_at).toLocaleTimeString('fr-FR', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          }),
+          unread: msg.is_read ? 0 : 1,
+          online: false
+        });
+      }
+    });
+
+    setConversations(Array.from(conversationMap.values()));
+  }, [userMessages, user]);
+
+  // Charger les messages de la conversation sélectionnée
+  useEffect(() => {
+    if (!selectedChat || !user) return;
+
+    const chatMessages = userMessages?.filter(msg => 
+      (msg.sender_id === user.id && msg.receiver_id === selectedChat) ||
+      (msg.sender_id === selectedChat && msg.receiver_id === user.id)
+    ) || [];
+
+    setMessages(chatMessages);
+  }, [selectedChat, userMessages, user]);
+
   const handleSendMessage = () => {
-    if (message.trim()) {
+    if (message.trim() && user && selectedChat) {
+      sendMessage(user.id, selectedChat, message);
+    }
+  };
+
+  const sendMessage = async (senderId: string, receiverId: string, content: string) => {
+    try {
+      if (supabase) {
+        const { data, error } = await supabase
+          .from('user_messages')
+          .insert([{
+            sender_id: senderId,
+            receiver_id: receiverId,
+            content,
+            is_read: false
+          }])
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        // Ajouter le message à l'état local
+        setMessages(prev => [...prev, data]);
+      } else {
+        // Fallback localStorage
+        const stored = JSON.parse(localStorage.getItem('userMessages') || '[]');
+        const newMessage = {
+          id: crypto.randomUUID(),
+          sender_id: senderId,
+          receiver_id: receiverId,
+          content,
+          is_read: false,
+          created_at: new Date().toISOString()
+        };
+        stored.push(newMessage);
+        localStorage.setItem('userMessages', JSON.stringify(stored));
+        setMessages(prev => [...prev, newMessage]);
+      }
+
       const newMessage = {
-        id: Date.now().toString(),
-        senderId: "me",
-        content: message,
+        id: crypto.randomUUID(),
+        sender_id: senderId,
+        receiver_id: receiverId,
+        content,
+        is_read: false,
+        created_at: new Date().toISOString(),
         timestamp: new Date().toLocaleTimeString("fr-FR", { 
           hour: "2-digit", 
           minute: "2-digit" 
-        }),
-        status: "sent" as const
+        })
       };
       
-      setMessages([...messages, newMessage]);
       setMessage("");
+      
+      toast({
+        title: "Message envoyé",
+        description: "Votre message a été envoyé avec succès"
+      });
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible d'envoyer le message",
+        variant: "destructive"
+      });
     }
   };
 
@@ -220,21 +276,26 @@ export default function Chat() {
           {messages.map((msg) => (
             <div
               key={msg.id}
-              className={`flex ${msg.senderId === "me" ? "justify-end" : "justify-start"}`}
+              className={`flex ${msg.sender_id === user?.id ? "justify-end" : "justify-start"}`}
             >
               <div
                 className={`max-w-[80%] p-3 rounded-2xl animate-slide-up ${
-                  msg.senderId === "me"
+                  msg.sender_id === user?.id
                     ? "bg-primary text-primary-foreground ml-auto"
                     : "bg-muted text-muted-foreground"
                 }`}
               >
                 <p className="text-sm">{msg.content}</p>
                 <div className="flex items-center justify-end gap-1 mt-1">
-                  <span className="text-xs opacity-70">{msg.timestamp}</span>
-                  {msg.senderId === "me" && (
+                  <span className="text-xs opacity-70">
+                    {new Date(msg.created_at).toLocaleTimeString('fr-FR', {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </span>
+                  {msg.sender_id === user?.id && (
                     <span className="text-xs opacity-70">
-                      {msg.status === "read" ? "✓✓" : msg.status === "delivered" ? "✓" : "⏳"}
+                      {msg.is_read ? "✓✓" : "✓"}
                     </span>
                   )}
                 </div>
@@ -325,8 +386,27 @@ export default function Chat() {
       </header>
 
       <main className="max-w-md mx-auto p-4 space-y-4 animate-fade-in">
+        {!isAuthenticated && (
+          <Card className="card-golden p-4 text-center">
+            <p className="text-muted-foreground mb-4">
+              Connectez-vous pour accéder à vos messages
+            </p>
+            <Button className="btn-golden" onClick={() => {}}>
+              Se connecter
+            </Button>
+          </Card>
+        )}
+
         {/* Conversations */}
-        <div className="space-y-2">
+        {isAuthenticated && (
+          <div className="space-y-2">
+            {messagesLoading && (
+              <div className="text-center py-4">
+                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="text-sm text-muted-foreground mt-2">Chargement...</p>
+              </div>
+            )}
+            
           {conversations.map((conversation, index) => (
             <Card
               key={conversation.id}

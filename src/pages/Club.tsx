@@ -545,8 +545,14 @@ export default function Club() {
           throw new Error("Le fichier est trop volumineux (max 10MB)");
         }
         
-        // Pour la démo, créer une URL blob
+        // Créer une URL blob persistante
         mediaUrl = URL.createObjectURL(selectedFile);
+        
+        // Stocker la référence pour éviter la garbage collection
+        if (!window.mediaBlobs) {
+          window.mediaBlobs = new Map();
+        }
+        window.mediaBlobs.set(mediaUrl, selectedFile);
       }
 
       let data = null;
@@ -555,7 +561,7 @@ export default function Club() {
         const insertData: any = {
           user_id: currentUserId,
           content: newPost.trim(),
-          post_type: selectedFileType === 'video' ? 'video' : selectedFileType === 'image' ? 'image' : 'text',
+          post_type: selectedFileType || 'text',
           likes: 0,
           comments_count: 0,
           shares: 0
@@ -676,7 +682,15 @@ export default function Club() {
         if (selectedFile.size > 10 * 1024 * 1024) {
           throw new Error("Le fichier est trop volumineux (max 10MB)");
         }
+        
+        // Créer une nouvelle URL blob
         mediaUrl = URL.createObjectURL(selectedFile);
+        
+        // Stocker la référence
+        if (!window.mediaBlobs) {
+          window.mediaBlobs = new Map();
+        }
+        window.mediaBlobs.set(mediaUrl, selectedFile);
       }
 
       if (supabase) {
@@ -902,6 +916,15 @@ export default function Club() {
       return;
     }
 
+    // Créer une URL blob et la stocker globalement pour éviter qu'elle expire
+    const blobUrl = URL.createObjectURL(file);
+    
+    // Stocker la référence pour éviter la garbage collection
+    if (!window.mediaBlobs) {
+      window.mediaBlobs = new Map();
+    }
+    window.mediaBlobs.set(blobUrl, file);
+
     setSelectedFile(file);
     setSelectedFileType(mediaType);
     setShowMediaModal(false);
@@ -1005,6 +1028,10 @@ export default function Club() {
                       src={URL.createObjectURL(selectedFile)} 
                       alt="Aperçu"
                       className="w-full h-32 object-cover rounded mt-2 max-w-full"
+                      onError={(e) => {
+                        console.error('Preview image failed to load');
+                        e.currentTarget.style.display = 'none';
+                      }}
                     />
                   )}
                   {selectedFileType === 'video' && (
@@ -1012,10 +1039,12 @@ export default function Club() {
                       <video 
                         src={URL.createObjectURL(selectedFile)} 
                         className="w-full h-32 object-cover rounded max-w-full"
+                        preload="metadata"
                         controls
-                      />
-                    </div>
-                  )}
+                        onError={(e) => {
+                          console.error('Preview video failed to load');
+                          e.currentTarget.style.display = 'none';
+                        }}
                 </div>
               )}
               
@@ -1114,7 +1143,11 @@ export default function Club() {
                     onShare={() => handleShare(post)}
                     isFavorited={post.isFavorite}
                     isReported={post.isReported}
-                    className="flex-shrink-0"
+                    playsInline
+                    preload="metadata"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
                   />
                 </div>
 
@@ -1128,7 +1161,11 @@ export default function Club() {
                     <img 
                       src={post.image} 
                       alt="Post image"
-                      className="w-full rounded-lg mb-3 max-w-full h-auto"
+                      className="w-full rounded-lg mb-3 max-w-full h-auto object-cover max-h-80"
+                      onError={(e) => {
+                        console.error('Image failed to load:', post.image);
+                        e.currentTarget.style.display = 'none';
+                      }}
                     />
                   )}
 
@@ -1136,13 +1173,14 @@ export default function Club() {
                     <div className="relative mb-3">
                       <video 
                         src={post.video} 
-                        className="w-full rounded-lg max-w-full h-auto"
+                        className="w-full rounded-lg max-w-full h-auto max-h-80"
                         controls
-                        poster={post.image}
+                        preload="metadata"
+                        onError={(e) => {
+                          console.error('Video failed to load:', post.video);
+                          e.currentTarget.style.display = 'none';
+                        }}
                       />
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <Play className="w-12 h-12 text-white/80 drop-shadow-lg" />
-                      </div>
                     </div>
                   )}
 
