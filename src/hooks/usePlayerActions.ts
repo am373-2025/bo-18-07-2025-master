@@ -63,7 +63,7 @@ export function usePlayerActions() {
       });
       return false;
     }
-  }, [user, voteActions, toast]);
+  }, [user, toast]);
 
   const toggleFavorite = useCallback(async (playerId: string, playerName: string) => {
     if (!user) {
@@ -116,7 +116,7 @@ export function usePlayerActions() {
       });
       return false;
     }
-  }, [user, favoriteActions, toast]);
+  }, [user, toast]);
 
   return {
     voteForPlayer,
