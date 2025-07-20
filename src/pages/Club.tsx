@@ -105,13 +105,12 @@ export default function Club() {
   const [editingPost, setEditingPost] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const currentUserId = user?.id || "currentUser";
-  const [postsInitialized, setPostsInitialized] = useState(false);
   const { toast } = useToast();
 
   // Charger les posts utilisateur depuis Supabase
   React.useEffect(() => {
     const loadUserPosts = async () => {
-      if (!user || postsInitialized) return;
+      if (!user) return;
       
       setLoading(true);
       try {
@@ -134,17 +133,16 @@ export default function Club() {
         console.error('Error loading user posts:', error);
       } finally {
         setLoading(false);
-        setPostsInitialized(true);
       }
     };
     
     if (isAuthenticated && user) {
       loadUserPosts();
     }
-  }, [user, isAuthenticated, postsInitialized]);
+  }, [user, isAuthenticated]);
 
   React.useEffect(() => {
-    if (userPosts.length > 0 && postsInitialized) {
+    if (userPosts.length > 0) {
       const supabasePosts = userPosts.map(post => ({
         id: post.id,
         user: {
