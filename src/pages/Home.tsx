@@ -56,13 +56,14 @@ export default function Home() {
   };
 
   const ceremonyDate = new Date("2025-10-30T20:00:00");
-  const [countdown, setCountdown] = useState(getCountdown(ceremonyDate));
+  const [countdown, setCountdown] = useState(() => getCountdown(ceremonyDate));
+  
   useEffect(() => {
     const timer = setInterval(() => {
       setCountdown(getCountdown(ceremonyDate));
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [ceremonyDate]);
 
   const handleVote = async (player: Player) => {
     await voteForPlayer(player.id, player.name);
