@@ -295,7 +295,8 @@ export default function Chat() {
           content: content.trim() || '',
           message_type: messageType,
           media_url: mediaUrl,
-          is_read: false
+          is_read: false,
+          created_at: new Date().toISOString()
         };
 
         if (conversation.type === 'group') {
@@ -309,12 +310,18 @@ export default function Chat() {
           .insert([messageData])
           .select(`
             id, sender_id, receiver_id, group_id, content, message_type, media_url,
-            is_read, created_at, updated_at,
+            is_read, created_at,
             sender:profiles!chat_messages_sender_id_fkey(name, avatar)
           `)
           .single();
 
         if (error) throw error;
+
+        // Update profile last_seen
+        await supabase
+          .from('profiles')
+          .update({ last_seen: new Date().toISOString() })
+          .eq('id', user.id);
 
         setMessage("");
         
@@ -334,12 +341,12 @@ export default function Chat() {
   };
 
   const uploadMedia = async (file: File): Promise<string | null> => {
-    if (!supabase) return null;
+    if (!supabase || !user) return null;
 
     try {
       const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `chat-media/${fileName}`;
+      const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const filePath = fileName;
 
       const { data, error } = await supabase.storage
         .from('media')
@@ -347,11 +354,11 @@ export default function Chat() {
 
       if (error) throw error;
 
-      const { data: urlData } = supabase.storage
+      const { data: { publicUrl } } = supabase.storage
         .from('media')
         .getPublicUrl(filePath);
 
-      return urlData.publicUrl;
+      return publicUrl;
     } catch (error) {
       console.error('Error uploading media:', error);
       toast({
@@ -422,6 +429,15 @@ export default function Chat() {
   };
 
   const handleMediaUpload = async (file: File, type: 'image' | 'video') => {
+    if (file.size > 10 * 1024 * 1024) { // 10MB limit
+      toast({
+        title: "Fichier trop volumineux",
+        description: "Le fichier ne doit pas dépasser 10MB",
+        variant: "destructive"
+      });
+      return;
+    }
+
     const mediaUrl = await uploadMedia(file);
     if (mediaUrl) {
       await sendMessage('', mediaUrl, type);
@@ -434,6 +450,13 @@ export default function Chat() {
     if (conversation) {
       loadMessages(chatId, conversation.type);
     }
+  };
+
+  const handleCreateChat = (newChat: Conversation) => {
+    setConversations(prev => [newChat, ...prev]);
+    setSelectedChat(newChat.id);
+    setMessages([]);
+    loadMessages(newChat.id, newChat.type);
   };
 
   if (selectedChat) {

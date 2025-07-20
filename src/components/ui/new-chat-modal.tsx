@@ -100,25 +100,6 @@ export const NewChatModal = ({ isOpen, onClose, onCreateChat }: NewChatModalProp
       const selectedUser = realUsers.find(u => u.id === selectedUsers[0]);
       if (!selectedUser) return;
 
-      // Vérifier si une conversation existe déjà
-      if (supabase) {
-        const { data: existingMessages } = await supabase
-          .from('chat_messages')
-          .select('id')
-          .is('group_id', null)
-          .or(`and(sender_id.eq.${user.id},receiver_id.eq.${selectedUser.id}),and(sender_id.eq.${selectedUser.id},receiver_id.eq.${user.id})`)
-          .limit(1);
-
-        if (existingMessages && existingMessages.length > 0) {
-          toast({
-            title: "Conversation existante",
-            description: `Vous avez déjà une conversation avec ${selectedUser.name}`
-          });
-          setCreateLoading(false);
-          return;
-        }
-      }
-
       const newChat = {
         id: selectedUser.id,
         type: "private",
@@ -129,7 +110,7 @@ export const NewChatModal = ({ isOpen, onClose, onCreateChat }: NewChatModalProp
         timestamp: "maintenant",
         unread: 0,
         online: selectedUser.is_online
-      };
+      } as const;
 
       onCreateChat(newChat);
       resetForm();
@@ -195,7 +176,7 @@ export const NewChatModal = ({ isOpen, onClose, onCreateChat }: NewChatModalProp
           unread: 0,
           participants: selectedUsers.length + 1,
           description: groupData.description
-        };
+        } as const;
 
         onCreateChat(newChat);
         resetForm();
