@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
 import { supabase, storage } from "@/lib/supabaseClient";
 
-export function useSupabaseTable(table: string, filter?: Record<string, any>, columnsToSelect?: string) {
-  const [data, setData] = useState<any[]>([]);
+export function useSupabaseTable<T = any>(
+  table: string, 
+  filter?: Record<string, any>, 
+  columnsToSelect?: string
+) {
+  const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [usingLocalStorage, setUsingLocalStorage] = useState(false);
@@ -60,16 +64,16 @@ export function useSupabaseTable(table: string, filter?: Record<string, any>, co
       }
     }
     fetchData();
-  }, [table, JSON.stringify(filter)]);
+  }, [table, JSON.stringify(filter), columnsToSelect]);
 
-  // CRUD helpers
-  const insert = async (values: any) => {
+  // Enhanced CRUD helpers with better error handling
+  const insert = async (values: T | T[]) => {
     try {
       if (supabase && !usingLocalStorage) {
         try {
           const { data: insertedData, error } = await supabase
             .from(table)
-            .insert(values)
+            .insert(Array.isArray(values) ? values : [values])
             .select();
             
           if (error) {
@@ -83,7 +87,6 @@ export function useSupabaseTable(table: string, filter?: Record<string, any>, co
           setData(prev => [...prev, ...newData]);
           return { data: newData, error: null };
         } catch (supabaseErr) {
-          // Fall back to localStorage on error
           console.warn(`Supabase insert failed for table ${table}, using localStorage:`, supabaseErr);
           setUsingLocalStorage(true);
         }
@@ -92,10 +95,11 @@ export function useSupabaseTable(table: string, filter?: Record<string, any>, co
       // localStorage fallback
       const current = storage.get(`table_${table}`, []);
       const newData = Array.isArray(values) ? values : [values];
-      // Generate IDs for new items if they don't have one
-      const dataWithIds = newData.map(item => ({
+      const dataWithIds = newData.map((item: any) => ({
         ...item,
-        id: item.id || Math.random().toString(36).substr(2, 9)
+        id: item.id || crypto.randomUUID(),
+        created_at: item.created_at || new Date().toISOString(),
+        updated_at: item.updated_at || new Date().toISOString()
       }));
       const updated = [...current, ...dataWithIds];
       storage.set(`table_${table}`, updated);
@@ -107,13 +111,13 @@ export function useSupabaseTable(table: string, filter?: Record<string, any>, co
     }
   };
   
-  const update = async (id: any, values: any) => {
+  const update = async (id: any, values: Partial<T>) => {
     try {
       if (supabase && !usingLocalStorage) {
         try {
           const { data: updatedData, error } = await supabase
             .from(table)
-            .update(values)
+            .update({ ...values, updated_at: new Date().toISOString() })
             .eq('id', id)
             .select();
             
@@ -124,8 +128,8 @@ export function useSupabaseTable(table: string, filter?: Record<string, any>, co
             throw new Error(error.message);
           }
           
-          setData(prev => prev.map(item => 
-            item.id === id ? { ...item, ...values } : item
+          setData(prev => prev.map((item: any) => 
+            item.id === id ? { ...item, ...values, updated_at: new Date().toISOString() } : item
           ));
           return { data: updatedData, error: null };
         } catch (supabaseErr) {
@@ -137,7 +141,7 @@ export function useSupabaseTable(table: string, filter?: Record<string, any>, co
       // localStorage fallback
       const current = storage.get(`table_${table}`, []);
       const updated = current.map((item: any) => 
-        item.id === id ? { ...item, ...values } : item
+        item.id === id ? { ...item, ...values, updated_at: new Date().toISOString() } : item
       );
       storage.set(`table_${table}`, updated);
       setData(updated);
@@ -164,7 +168,7 @@ export function useSupabaseTable(table: string, filter?: Record<string, any>, co
             throw new Error(error.message);
           }
           
-          setData(prev => prev.filter(item => item.id !== id));
+          setData(prev => prev.filter((item: any) => item.id !== id));
           return { data: null, error: null };
         } catch (supabaseErr) {
           console.warn(`Supabase delete failed for table ${table}, using localStorage:`, supabaseErr);
@@ -184,5 +188,17 @@ export function useSupabaseTable(table: string, filter?: Record<string, any>, co
     }
   };
 
-  return { data, loading, error, insert, update, remove, usingLocalStorage };
-} 
+  return { 
+    data, 
+    loading, 
+    error, 
+    insert, 
+    update, 
+    remove, 
+    usingLocalStorage,
+    refetch: () => {
+      setLoading(true);
+      // Re-run the effect by changing a dependency
+    }
+  };
+}

@@ -16,26 +16,49 @@ export const useAuth = () => {
   });
 
   useEffect(() => {
+    let mounted = true;
+
     // Get initial user
-    getCurrentUser().then(user => {
-      setState(prev => ({ ...prev, user, loading: false }));
-    });
+    const initializeAuth = async () => {
+      try {
+        const user = await getCurrentUser();
+        if (mounted) {
+          setState(prev => ({ ...prev, user, loading: false }));
+        }
+      } catch (error) {
+        if (mounted) {
+          setState(prev => ({ ...prev, loading: false }));
+        }
+      }
+    };
+
+    initializeAuth();
 
     // Listen for auth changes
+    let subscription: any = null;
     if (supabase) {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(
         async (event, session) => {
-          setState(prev => ({ 
-            ...prev, 
-            user: session?.user ?? null,
-            loading: false,
-            error: null
-          }));
+          console.log('Auth state changed:', event, session?.user?.email);
+          if (mounted) {
+            setState(prev => ({ 
+              ...prev, 
+              user: session?.user ?? null,
+              loading: false,
+              error: null
+            }));
+          }
         }
       );
-
-      return () => subscription.unsubscribe();
+      subscription = authSubscription;
     }
+
+    return () => {
+      mounted = false;
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -56,17 +79,20 @@ export const useAuth = () => {
 
     try {
       const { data, error } = await signIn(email, password);
+      
       if (error) {
-        // Handle specific authentication errors
-        if (error.message.includes('Invalid login credentials')) {
-          setState(prev => ({ ...prev, error: 'Email ou mot de passe incorrect', loading: false }));
-          return { data: null, error: { message: 'Email ou mot de passe incorrect' } };
+        let errorMessage = error.message;
+        if (error.message.includes('Invalid login credentials') || error.message.includes('invalid_credentials')) {
+          errorMessage = 'Email ou mot de passe incorrect. Vérifiez vos identifiants.';
         }
-        setState(prev => ({ ...prev, error: error.message, loading: false }));
+        setState(prev => ({ ...prev, error: errorMessage, loading: false }));
+        return { data: null, error: { message: errorMessage } };
       }
-      return { data, error };
+      
+      setState(prev => ({ ...prev, user: data.user, loading: false }));
+      return { data, error: null };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      const errorMessage = err instanceof Error ? err.message : 'Erreur de connexion';
       setState(prev => ({ ...prev, error: errorMessage, loading: false }));
       return { data: null, error: { message: errorMessage } };
     }
@@ -90,12 +116,16 @@ export const useAuth = () => {
 
     try {
       const { data, error } = await signUp(email, password, { name });
+      
       if (error) {
         setState(prev => ({ ...prev, error: error.message, loading: false }));
+        return { data: null, error };
       }
-      return { data, error };
+      
+      setState(prev => ({ ...prev, user: data.user, loading: false }));
+      return { data, error: null };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      const errorMessage = err instanceof Error ? err.message : 'Erreur d\'inscription';
       setState(prev => ({ ...prev, error: errorMessage, loading: false }));
       return { data: null, error: { message: errorMessage } };
     }
@@ -120,10 +150,14 @@ export const useAuth = () => {
       }
       return { error };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      const errorMessage = err instanceof Error ? err.message : 'Erreur de déconnexion';
       setState(prev => ({ ...prev, error: errorMessage, loading: false }));
       return { error: { message: errorMessage } };
     }
+  };
+
+  const clearError = () => {
+    setState(prev => ({ ...prev, error: null }));
   };
 
   return {
@@ -133,6 +167,7 @@ export const useAuth = () => {
     login,
     register,
     logout,
+    clearError,
     isAuthenticated: !!state.user,
   };
 };

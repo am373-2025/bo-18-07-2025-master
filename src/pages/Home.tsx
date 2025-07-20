@@ -13,16 +13,11 @@ import { Bell, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useResponsive } from "@/hooks/useResponsive";
 import { useProfile } from "@/hooks/useProfile";
-import ballonDorIcon from "@/assets/ballon-dor-icon.png";
-import mbappePhoto from "@/assets/player-mbappe.jpg";
-import haalandPhoto from "@/assets/player-haaland.jpg";
-import bellinghamPhoto from "@/assets/player-bellingham.jpg";
 import { Link } from "react-router-dom";
-import { fetchPlayerByName } from "@/lib/utils";
-import { favoritePlayersNames } from "@/utils/ballonDorPlayers";
 import { useSupabaseTable } from "@/hooks/useSupabaseTable";
 import { realRankingStatic } from "./Ranking";
 import type { Player } from "@/types";
+import { Trophy } from "lucide-react";
 
 // Données de test pour les joueurs favoris
 const favoritePlayersData: Player[] = [
@@ -32,7 +27,7 @@ const favoritePlayersData: Player[] = [
     name: "Kylian Mbappé",
     position: "Attaquant",
     club: "Real Madrid",
-    photo: mbappePhoto,
+    photo: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&h=300&fit=crop",
     votes: 12456,
     isLiked: true
   },
@@ -42,7 +37,7 @@ const favoritePlayersData: Player[] = [
     name: "Erling Haaland",
     position: "Attaquant",
     club: "Manchester City",
-    photo: haalandPhoto,
+    photo: "https://images.unsplash.com/photo-1556506751-69a7d6fb64dd?w=400&h=300&fit=crop",
     votes: 11234,
     isLiked: false
   },
@@ -52,7 +47,7 @@ const favoritePlayersData: Player[] = [
     name: "Jude Bellingham",
     position: "Milieu",
     club: "Real Madrid",
-    photo: bellinghamPhoto,
+    photo: "https://images.unsplash.com/photo-1543326727-cf6c39e8f84c?w=400&h=300&fit=crop",
     votes: 9876,
     isLiked: true
   },
@@ -85,21 +80,17 @@ export default function Home() {
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [showPlayerDetails, setShowPlayerDetails] = useState(false);
   const [notificationCount, setNotificationCount] = useState(3);
-  const [activeFilter, setActiveFilter] = useState("all");
   const { toast } = useToast();
   const { isMobile, isTablet } = useResponsive();
   const { addVote, toggleFavorite } = useProfile();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [supabaseStatus, setSupabaseStatus] = useState<string>("");
   const {
     data: playersData,
     loading: loadingSupabaseTable,
-    error: errorSupabaseTable,
+    error,
     insert,
     update,
     usingLocalStorage
-  } = useSupabaseTable<Player>('players', undefined, 'id, slug, name, position, club, photo, votes, country, age, ranking, trend, created_at, updated_at');
+  } = useSupabaseTable<Player>('players', undefined, 'id, slug, name, position, club, photo, votes, country, age, ranking, trend');
   const top5Ranking = realRankingStatic.slice(0, 5);
 
   // Handlers pour le top 5 (pas de like, vote local)
@@ -121,105 +112,12 @@ export default function Home() {
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    // Afficher la modale de compte à rebours au chargement
-    const timer = setTimeout(() => {
-      // setShowCountdown(true); // This line is removed
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
-    Promise.all(favoritePlayersNames.map(name => fetchPlayerByName(name)
-      .then(data => data.response?.[0] || null)
-      .catch(() => null)
-    ))
-      .then(apiPlayers => {
-        // Fallback sur les données mockées si l'API ne trouve pas le joueur
-        const fallbackPlayers = [
-          {
-            id: "1",
-            slug: "kylian-mbappe",
-            name: "Kylian Mbappé",
-            position: "Attaquant",
-            club: "Real Madrid",
-            photo: mbappePhoto,
-            votes: 12456,
-            isLiked: true
-          },
-          {
-            id: "2",
-            slug: "erling-haaland",
-            name: "Erling Haaland",
-            position: "Attaquant",
-            club: "Manchester City",
-            photo: haalandPhoto,
-            votes: 11234,
-            isLiked: false
-          },
-          {
-            id: "3",
-            slug: "jude-bellingham",
-            name: "Jude Bellingham",
-            position: "Milieu",
-            club: "Real Madrid",
-            photo: bellinghamPhoto,
-            votes: 9876,
-            isLiked: true
-          },
-          {
-            id: "4",
-            slug: "pedri-gonzalez",
-            name: "Pedri González",
-            position: "Milieu",
-            club: "FC Barcelone",
-            photo: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=400&h=300&fit=crop",
-            votes: 8765,
-            isLiked: false
-          }
-        ];
-        const playersFinal = apiPlayers.map((apiPlayer, i) => {
-          if (apiPlayer) {
-            return {
-              id: apiPlayer.player.id,
-              slug: fallbackPlayers[i].slug,
-              name: apiPlayer.player.name,
-              position: apiPlayer.statistics?.[0]?.games?.position || fallbackPlayers[i].position,
-              club: apiPlayer.statistics?.[0]?.team?.name || fallbackPlayers[i].club,
-              photo: apiPlayer.player.photo || fallbackPlayers[i].photo,
-              votes: fallbackPlayers[i].votes,
-              isLiked: fallbackPlayers[i].isLiked,
-              stats: apiPlayer.statistics?.[0] || {},
-            };
-          } else {
-            return fallbackPlayers[i];
-          }
-        });
-        setPlayers(playersFinal);
-      })
-      .catch(() => {
-        setError("Erreur lors du chargement des joueurs depuis l'API.");
-        setPlayers([]);
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
+  // Initialize with sample data if empty
   useEffect(() => {
     if (!loadingSupabaseTable && playersData.length === 0) {
       insert(favoritePlayersData).catch(console.error);
     }
-  }, [loadingSupabaseTable, playersData.length, insert]);
-
-  useEffect(() => {
-    if (usingLocalStorage) {
-      setSupabaseStatus('Using localStorage fallback (Supabase table not available)');
-    } else {
-      setSupabaseStatus('Connected to Supabase database');
-    }
-  }, []);
+  }, [loadingSupabaseTable, playersData.length]);
 
   const handleViewDetails = (player: Player) => {
     setSelectedPlayer(player);
@@ -276,48 +174,17 @@ export default function Home() {
     setNotificationCount(0); // Reset notification count when opened
   };
 
-  const handleSearch = (query: string) => {
-    console.log("Recherche:", query);
-    // TODO: Implémenter la recherche
-  };
-
-  const handleFilterChange = (filters: Record<string, any>) => {
-    console.log("Filtres:", filters);
-    // TODO: Implémenter les filtres
-  };
-
-  const filterOptions = {
-    position: [
-      { id: "gk", label: "Gardien", value: "GK" },
-      { id: "def", label: "Défenseur", value: "DEF" },
-      { id: "mid", label: "Milieu", value: "MID" },
-      { id: "att", label: "Attaquant", value: "ATT" }
-    ],
-    league: [
-      { id: "ligue1", label: "Ligue 1", value: "Ligue 1" },
-      { id: "premier", label: "Premier League", value: "Premier League" },
-      { id: "laliga", label: "La Liga", value: "La Liga" },
-      { id: "bundesliga", label: "Bundesliga", value: "Bundesliga" }
-    ]
-  };
+  // Display data from Supabase or fallback
+  const displayPlayers = playersData.length > 0 ? playersData : favoritePlayersData;
 
   return (
     <ErrorBoundary>
       <div className="min-h-screen bg-background pb-20">
-      {supabaseStatus && (
-        <div className="p-2 bg-green-100 text-green-800 text-sm rounded mb-2">
-          {supabaseStatus}
-        </div>
-      )}
       {/* Header */}
       <header className="bg-card/95 backdrop-blur-md border-b border-border/50 sticky top-0 z-40">
         <div className={`flex items-center justify-between p-4 mx-auto ${isMobile ? 'max-w-md' : isTablet ? 'max-w-2xl' : 'max-w-4xl'}`}>
           <div className="flex items-center gap-3">
-            <img 
-              src={ballonDorIcon} 
-              alt="Ballon d'Or" 
-              className="w-10 h-10 animate-float"
-            />
+            <Trophy className="w-10 h-10 text-primary animate-float" />
             <div>
               <h1 className="text-gradient-gold font-bold text-lg">Ballon d'Or</h1>
               <p className="text-xs text-muted-foreground">2025</p>
@@ -387,11 +254,27 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Loading state */}
+        {loadingSupabaseTable && (
+          <div className="text-center py-8">
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-muted-foreground">Chargement des joueurs...</p>
+          </div>
+        )}
+
+        {/* Error state */}
+        {error && (
+          <div className="text-center py-8">
+            <p className="text-destructive">Erreur: {error}</p>
+            <p className="text-muted-foreground text-sm mt-2">Utilisation des données par défaut</p>
+          </div>
+        )}
         {/* Filtres */}
         
 
         {/* Top 5 Classement réel */}
-        <div className="mt-8">
+        {!loadingSupabaseTable && (
+        <div className="space-y-6">
           <h2 className="text-xl font-bold mb-4">Top 5 Classement réel</h2>
           <div className="grid gap-4">
             {top5Ranking.map((player, index) => (
@@ -411,6 +294,7 @@ export default function Home() {
             ))}
           </div>
         </div>
+        )}
 
         {/* Call to Action */}
         <div className="bg-gradient-to-r from-muted to-card p-6 rounded-2xl text-center space-y-4 border border-border/50">
@@ -427,10 +311,6 @@ export default function Home() {
       </main>
 
       {/* Modales */}
-      {/* <CountdownModal 
-        isOpen={showCountdown} 
-        onClose={() => setShowCountdown(false)} 
-      /> */}
 
       <PlayerDetailsModal
         player={selectedPlayer}

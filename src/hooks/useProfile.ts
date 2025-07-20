@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import { supabase, db } from '@/lib/supabaseClient';
 import { useAuth } from './useAuth';
 import type { UserProfile } from '@/types';
 
@@ -25,35 +25,22 @@ export const useProfile = () => {
     setError(null);
 
     try {
-      if (supabase) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-
-        if (error) {
-          if (error.code === 'PGRST116') {
-            // Profile doesn't exist, create one
-            await createProfile();
-          } else {
-            throw error;
-          }
-        } else {
-          setProfile(data as UserProfile);
-        }
+      const data = await db.getProfile(user.id);
+      
+      if (data) {
+        setProfile({
+          ...data,
+          joinDate: data.created_at ? `Membre depuis ${new Date(data.created_at).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}` : 'Nouveau membre',
+          favorites: data.favorites || [],
+          stats: data.stats || { votes: 0, posts: 0, likes: 0, comments: 0 }
+        });
       } else {
-        // localStorage fallback
-        const stored = localStorage.getItem(`profile_${user.id}`);
-        if (stored) {
-          setProfile(JSON.parse(stored));
-        } else {
-          await createProfile();
-        }
+        // Create profile if doesn't exist
+        await createProfile();
       }
     } catch (err) {
       console.error('Error loading profile:', err);
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(err instanceof Error ? err.message : 'Erreur de chargement du profil');
     } finally {
       setLoading(false);
     }
@@ -62,22 +49,16 @@ export const useProfile = () => {
   const createProfile = async () => {
     if (!user) return;
 
-    const newProfile: UserProfile = {
+    const newProfile: Partial<UserProfile> = {
       id: user.id,
       name: user.user_metadata?.name || user.email?.split('@')[0] || '',
+      email: user.email || '',
       username: user.email?.split('@')[0] || '',
       bio: '',
       avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
       followers: 0,
       following: 0,
-      joinDate: `Membre depuis ${new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}`,
-      favorites: [],
-      stats: {
-        votes: 0,
-        posts: 0,
-        likes: 0,
-        comments: 0
-      }
+      stats: { votes: 0, posts: 0, likes: 0, comments: 0 }
     };
 
     try {
@@ -89,14 +70,24 @@ export const useProfile = () => {
           .single();
 
         if (error) throw error;
-        setProfile(data as UserProfile);
+        setProfile({
+          ...data,
+          joinDate: `Membre depuis ${new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}`,
+          favorites: []
+        });
       } else {
-        localStorage.setItem(`profile_${user.id}`, JSON.stringify(newProfile));
-        setProfile(newProfile);
+        // localStorage fallback
+        const profileWithDefaults = {
+          ...newProfile,
+          joinDate: `Membre depuis ${new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}`,
+          favorites: []
+        };
+        localStorage.setItem(`profile_${user.id}`, JSON.stringify(profileWithDefaults));
+        setProfile(profileWithDefaults as UserProfile);
       }
     } catch (err) {
       console.error('Error creating profile:', err);
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(err instanceof Error ? err.message : 'Erreur de création du profil');
     }
   };
 
@@ -107,55 +98,27 @@ export const useProfile = () => {
     setError(null);
 
     try {
-      const updatedProfile = { ...profile, ...updates };
-
-      if (supabase) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .update(updates)
-          .eq('id', user.id)
-          .select()
-          .single();
-
-        if (error) throw error;
-        setProfile(data as UserProfile);
-      } else {
-        localStorage.setItem(`profile_${user.id}`, JSON.stringify(updatedProfile));
-        setProfile(updatedProfile);
-      }
+      const updatedData = await db.updateProfile(user.id, updates);
+      setProfile(prev => prev ? { ...prev, ...updatedData } : null);
     } catch (err) {
       console.error('Error updating profile:', err);
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(err instanceof Error ? err.message : 'Erreur de mise à jour du profil');
+      throw err;
     } finally {
       setLoading(false);
     }
   };
 
   const addVote = async (playerId: string, playerName: string) => {
-    if (!user) return;
+    if (!user) throw new Error('Utilisateur non connecté');
 
     try {
-      if (supabase) {
-        const { error } = await supabase
-          .from('user_votes')
-          .insert([{
-            user_id: user.id,
-            player_id: playerId,
-            player_name: playerName
-          }]);
-
-        if (error) throw error;
-      } else {
-        const votes = JSON.parse(localStorage.getItem('userVotes') || '[]');
-        votes.push({ user_id: user.id, player_id: playerId, player_name: playerName, created_at: new Date().toISOString() });
-        localStorage.setItem('userVotes', JSON.stringify(votes));
-      }
-
+      await db.voteForPlayer(user.id, playerId, playerName);
+      
       // Update profile stats
       if (profile) {
-        await updateProfile({ 
-          stats: { ...profile.stats, votes: profile.stats.votes + 1 } 
-        });
+        const newStats = { ...profile.stats, votes: profile.stats.votes + 1 };
+        await updateProfile({ stats: newStats });
       }
     } catch (err) {
       console.error('Error adding vote:', err);
@@ -164,48 +127,11 @@ export const useProfile = () => {
   };
 
   const toggleFavorite = async (playerId: string, playerName: string) => {
-    if (!user) return;
+    if (!user) throw new Error('Utilisateur non connecté');
 
     try {
-      if (supabase) {
-        // Check if already favorited
-        const { data: existing } = await supabase
-          .from('user_favorites')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('player_id', playerId)
-          .single();
-
-        if (existing) {
-          // Remove favorite
-          const { error } = await supabase
-            .from('user_favorites')
-            .delete()
-            .eq('user_id', user.id)
-            .eq('player_id', playerId);
-          if (error) throw error;
-        } else {
-          // Add favorite
-          const { error } = await supabase
-            .from('user_favorites')
-            .insert([{
-              user_id: user.id,
-              player_id: playerId,
-              player_name: playerName
-            }]);
-          if (error) throw error;
-        }
-      } else {
-        const favorites = JSON.parse(localStorage.getItem('userFavorites') || '[]');
-        const existingIndex = favorites.findIndex((fav: any) => fav.player_id === playerId && fav.user_id === user.id);
-        
-        if (existingIndex >= 0) {
-          favorites.splice(existingIndex, 1);
-        } else {
-          favorites.push({ user_id: user.id, player_id: playerId, player_name: playerName, created_at: new Date().toISOString() });
-        }
-        localStorage.setItem('userFavorites', JSON.stringify(favorites));
-      }
+      const result = await db.toggleFavorite(user.id, playerId, playerName);
+      return result.isFavorited;
     } catch (err) {
       console.error('Error toggling favorite:', err);
       throw err;

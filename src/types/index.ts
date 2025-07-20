@@ -1,4 +1,4 @@
-// Types centralisés pour l'application
+// Types centralisés pour l'application Ballon d'Or 2025
 
 export interface Player {
   id: string;
@@ -8,12 +8,14 @@ export interface Player {
   club: string;
   photo: string;
   votes: number;
-  isLiked?: boolean;
+  isLiked?: boolean; // État client-side uniquement
   stats?: PlayerStats;
   country?: string;
   age?: number;
   ranking?: number;
   trend?: 'up' | 'down' | 'stable';
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface PlayerStats {
@@ -24,12 +26,14 @@ export interface PlayerStats {
   yellowCards?: number;
   redCards?: number;
   minutesPlayed?: number;
+  trophies?: string[];
 }
 
 export interface UserProfile {
   id: string;
   name: string;
-  username: string;
+  username?: string;
+  email?: string;
   bio: string;
   avatar: string;
   followers: number;
@@ -38,6 +42,8 @@ export interface UserProfile {
   favorites: string[];
   stats: UserStats;
   isAdmin?: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface UserStats {
@@ -47,9 +53,51 @@ export interface UserStats {
   comments: number;
 }
 
+export interface UserVote {
+  id: string;
+  user_id: string;
+  player_id: string;
+  player_name: string;
+  created_at: string;
+}
+
+export interface UserFavorite {
+  id: string;
+  user_id: string;
+  player_id: string;
+  player_name: string;
+  created_at: string;
+}
+
+export interface UserPost {
+  id: string;
+  user_id: string;
+  content: string;
+  image_url?: string;
+  video_url?: string;
+  post_type: 'text' | 'image' | 'video' | 'poll';
+  poll_data?: PollData;
+  likes: number;
+  comments_count: number;
+  shares: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PollData {
+  question: string;
+  options: PollOption[];
+}
+
+export interface PollOption {
+  text: string;
+  votes: number;
+  voted: boolean;
+}
+
 export interface Comment {
   id: string;
-  userId: string;
+  user_id: string;
   userName: string;
   userAvatar: string;
   content: string;
@@ -152,4 +200,20 @@ export enum League {
   SERIE_A = 'Serie A',
   BUNDESLIGA = 'Bundesliga',
   LIGUE_1 = 'Ligue 1'
+}
+
+// Types pour l'authentification
+export interface AuthUser {
+  id: string;
+  email: string;
+  user_metadata: {
+    name?: string;
+    avatar_url?: string;
+  };
+}
+
+export interface AuthState {
+  user: AuthUser | null;
+  loading: boolean;
+  error: string | null;
 }
