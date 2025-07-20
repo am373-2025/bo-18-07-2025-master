@@ -914,31 +914,28 @@ export default function Club() {
         {/* Create/Edit Post */}
         {showCreatePost && (
           <Card className="card-golden overflow-hidden">
-        <CreatePostForm
-          isOpen={showCreatePost}
-          onClose={resetCreateForm}
-          post={newPost}
-          setPost={setNewPost}
-          onSubmit={editingPost ? handleUpdatePost : handleCreatePost}
-          onShowMedia={() => setShowMediaModal(true)}
-          onShowPoll={() => setShowPollModal(true)}
-          loading={loading}
-          selectedFile={selectedFile}
-          selectedFileType={selectedFileType}
-          onRemoveFile={() => {
-            setSelectedFile(null);
-            setSelectedFileType(null);
-          }}
-          editingPost={editingPost}
-        />
+            <CreatePostForm
+              isOpen={showCreatePost}
+              onClose={resetCreateForm}
+              post={newPost}
+              setPost={setNewPost}
+              onSubmit={editingPost ? handleUpdatePost : handleCreatePost}
+              onShowMedia={() => setShowMediaModal(true)}
+              onShowPoll={() => setShowPollModal(true)}
+              loading={loading}
+              selectedFile={selectedFile}
+              selectedFileType={selectedFileType}
+              onRemoveFile={() => {
+                setSelectedFile(null);
+                setSelectedFileType(null);
+              }}
+              editingPost={editingPost}
+            />
+          </Card>
+        )}
 
         {/* Feed */}
         <div className="space-y-4">
-          {posts.map((post, index) => (
-            <Card key={post.id} className="card-golden overflow-hidden">
-              <CardContent className="p-4 space-y-4">
-                {/* Header */}
-                <div className="flex items-start gap-3">
           {posts.map((post) => (
             <PostCard
               key={post.id}
@@ -1057,4 +1054,17 @@ interface Post {
   isFavorite: boolean;
   isReported: boolean;
   canEdit?: boolean;
+}
+
+interface Comment {
+  id: string;
+  user_id: string;
+  post_id: string;
+  content: string;
+  likes: number;
+  created_at: string;
+  user?: {
+    name: string;
+    avatar: string;
+  };
 }
