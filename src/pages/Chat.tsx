@@ -512,7 +512,8 @@ export default function Chat() {
               </Card>
             ))}
           </div>
-        </div>
+        )}
+
       </main>
 
       {/* Modales */}
