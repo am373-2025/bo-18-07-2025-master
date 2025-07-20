@@ -341,12 +341,20 @@ export default function Chat() {
   };
 
   const uploadMedia = async (file: File): Promise<string | null> => {
-    if (!supabase || !user) return null;
+    if (!supabase || !user) {
+      // Fallback: create blob URL for localStorage mode
+      const blobUrl = URL.createObjectURL(file);
+      if (!window.mediaBlobs) {
+        window.mediaBlobs = new Map();
+      }
+      window.mediaBlobs.set(blobUrl, file);
+      return blobUrl;
+    }
 
     try {
       const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = fileName;
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const filePath = `${user.id}/${fileName}`;
 
       const { data, error } = await supabase.storage
         .from('media')
@@ -354,19 +362,29 @@ export default function Chat() {
 
       if (error) throw error;
 
-      const { data: { publicUrl } } = supabase.storage
+      const { data: { publicUrl }, error: urlError } = supabase.storage
         .from('media')
         .getPublicUrl(filePath);
+
+      if (urlError) throw urlError;
 
       return publicUrl;
     } catch (error) {
       console.error('Error uploading media:', error);
+      
+      // Fallback: create blob URL if upload fails
+      const blobUrl = URL.createObjectURL(file);
+      if (!window.mediaBlobs) {
+        window.mediaBlobs = new Map();
+      }
+      window.mediaBlobs.set(blobUrl, file);
+      
       toast({
-        title: "Erreur d'upload",
-        description: "Impossible d'envoyer le fichier",
-        variant: "destructive"
+        title: "Upload en mode local",
+        description: "Fichier stocké temporairement",
       });
-      return null;
+      
+      return blobUrl;
     }
   };
 
