@@ -1,3 +1,4 @@
+import React from 'react';
 import { useState, useEffect } from "react";
 import { PlayerCard } from "@/components/player/PlayerCard";
 import { LoadingSpinner } from "@/components/common/LoadingSpinner";
