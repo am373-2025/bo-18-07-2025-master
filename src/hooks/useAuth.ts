@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
-import { supabase, signIn, signUp, signOut, getCurrentUser } from '@/lib/supabaseClient';
-import { User } from '@supabase/supabase-js';
+import { useState, useEffect, createContext, useContext } from 'react';
+import { supabase } from '@/lib/supabase';
+import type { User } from '@supabase/supabase-js';
+import { useToast } from './use-toast';
 
 interface AuthState {
   user: User | null;
@@ -8,151 +9,220 @@ interface AuthState {
   error: string | null;
 }
 
-export const useAuth = () => {
+interface AuthContextType extends AuthState {
+  signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signUp: (email: string, password: string, name?: string) => Promise<{ success: boolean; error?: string }>;
+  signOut: () => Promise<void>;
+  clearError: () => void;
+  isAuthenticated: boolean;
+}
+
+const AuthContext = createContext<AuthContextType | null>(null);
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider');
+  }
+  return context;
+}
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({
     user: null,
     loading: true,
-    error: null,
+    error: null
   });
+  
+  const { toast } = useToast();
 
+  // Initialisation de l'authentification
   useEffect(() => {
     let mounted = true;
 
-    // Get initial user
-    const initializeAuth = async () => {
-      try {
-        const user = await getCurrentUser();
+    const initialize = async () => {
+      if (!supabase) {
+        // Mode localStorage
+        const mockUser = localStorage.getItem('mockUser');
         if (mounted) {
-          setState(prev => ({ ...prev, user, loading: false }));
+          setState({
+            user: mockUser ? JSON.parse(mockUser) : null,
+            loading: false,
+            error: null
+          });
         }
-      } catch (error) {
+        return;
+      }
+
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        
         if (mounted) {
-          setState(prev => ({ ...prev, loading: false }));
+          setState({
+            user: error ? null : user,
+            loading: false,
+            error: error?.message || null
+          });
+        }
+      } catch (error: any) {
+        if (mounted) {
+          setState({
+            user: null,
+            loading: false,
+            error: error.message
+          });
         }
       }
     };
 
-    initializeAuth();
+    initialize();
 
-    // Listen for auth changes
-    let subscription: any = null;
-    if (supabase) {
-      const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(
-        async (event, session) => {
-          console.log('Auth state changed:', event, session?.user?.email);
-          if (mounted) {
-            setState(prev => ({ 
-              ...prev, 
-              user: session?.user ?? null,
-              loading: false,
-              error: null
-            }));
-          }
+    // Écouter les changements d'authentification
+    const { data: { subscription } } = supabase?.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state changed:', event);
+        
+        if (mounted) {
+          setState(prev => ({
+            ...prev,
+            user: session?.user ?? null,
+            loading: false,
+            error: null
+          }));
         }
-      );
-      subscription = authSubscription;
-    }
+      }
+    ) || { data: { subscription: { unsubscribe: () => {} } } };
 
     return () => {
       mounted = false;
-      if (subscription) {
-        subscription.unsubscribe();
-      }
+      subscription.unsubscribe();
     };
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string) => {
     setState(prev => ({ ...prev, loading: true, error: null }));
-    
+
     if (!supabase) {
-      // Mock login for localStorage mode
+      // Mode localStorage
       const mockUser = {
-        id: 'mock-user-' + Date.now(),
+        id: `mock-${Date.now()}`,
         email,
         user_metadata: { name: email.split('@')[0] }
       } as User;
-      
-      setState(prev => ({ ...prev, user: mockUser, loading: false }));
+
       localStorage.setItem('mockUser', JSON.stringify(mockUser));
-      return { data: { user: mockUser }, error: null };
+      setState({ user: mockUser, loading: false, error: null });
+      
+      toast({
+        title: "Connexion réussie (mode démo)",
+        description: "Vous êtes connecté en mode hors ligne"
+      });
+      
+      return { success: true };
     }
 
     try {
-      const { data, error } = await signIn(email, password);
-      
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
       if (error) {
-        let errorMessage = error.message;
-        if (error.message.includes('Invalid login credentials') || error.message.includes('invalid_credentials')) {
-          errorMessage = 'Email ou mot de passe incorrect. Vérifiez vos identifiants.';
-        }
-        setState(prev => ({ ...prev, error: errorMessage, loading: false }));
-        return { data: null, error: { message: errorMessage } };
+        setState(prev => ({ ...prev, loading: false, error: error.message }));
+        return { success: false, error: error.message };
       }
-      
-      setState(prev => ({ ...prev, user: data.user, loading: false }));
-      return { data, error: null };
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur de connexion';
-      setState(prev => ({ ...prev, error: errorMessage, loading: false }));
-      return { data: null, error: { message: errorMessage } };
+
+      setState({
+        user: data.user,
+        loading: false,
+        error: null
+      });
+
+      toast({
+        title: "Connexion réussie",
+        description: "Bienvenue dans l'application !"
+      });
+
+      return { success: true };
+    } catch (error: any) {
+      setState(prev => ({ ...prev, loading: false, error: error.message }));
+      return { success: false, error: error.message };
     }
   };
 
-  const register = async (email: string, password: string, name?: string) => {
+  const signUp = async (email: string, password: string, name?: string) => {
     setState(prev => ({ ...prev, loading: true, error: null }));
-    
+
     if (!supabase) {
-      // Mock registration for localStorage mode
+      // Mode localStorage
       const mockUser = {
-        id: 'mock-user-' + Date.now(),
+        id: `mock-${Date.now()}`,
         email,
         user_metadata: { name: name || email.split('@')[0] }
       } as User;
-      
-      setState(prev => ({ ...prev, user: mockUser, loading: false }));
+
       localStorage.setItem('mockUser', JSON.stringify(mockUser));
-      return { data: { user: mockUser }, error: null };
+      setState({ user: mockUser, loading: false, error: null });
+      
+      toast({
+        title: "Inscription réussie (mode démo)",
+        description: "Votre compte a été créé en mode hors ligne"
+      });
+      
+      return { success: true };
     }
 
     try {
-      const { data, error } = await signUp(email, password, { name });
-      
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { name }
+        }
+      });
+
       if (error) {
-        setState(prev => ({ ...prev, error: error.message, loading: false }));
-        return { data: null, error };
+        setState(prev => ({ ...prev, loading: false, error: error.message }));
+        return { success: false, error: error.message };
       }
-      
-      setState(prev => ({ ...prev, user: data.user, loading: false }));
-      return { data, error: null };
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur d\'inscription';
-      setState(prev => ({ ...prev, error: errorMessage, loading: false }));
-      return { data: null, error: { message: errorMessage } };
+
+      setState({
+        user: data.user,
+        loading: false,
+        error: null
+      });
+
+      toast({
+        title: "Inscription réussie",
+        description: "Votre compte a été créé avec succès !"
+      });
+
+      return { success: true };
+    } catch (error: any) {
+      setState(prev => ({ ...prev, loading: false, error: error.message }));
+      return { success: false, error: error.message };
     }
   };
 
-  const logout = async () => {
+  const signOut = async () => {
     setState(prev => ({ ...prev, loading: true }));
-    
+
     if (!supabase) {
-      // Mock logout for localStorage mode
       localStorage.removeItem('mockUser');
       setState({ user: null, loading: false, error: null });
-      return { error: null };
+      return;
     }
 
     try {
-      const { error } = await signOut();
-      if (error) {
-        setState(prev => ({ ...prev, error: error.message, loading: false }));
-      } else {
-        setState({ user: null, loading: false, error: null });
-      }
-      return { error };
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur de déconnexion';
-      setState(prev => ({ ...prev, error: errorMessage, loading: false }));
-      return { error: { message: errorMessage } };
+      await supabase.auth.signOut();
+      setState({ user: null, loading: false, error: null });
+      
+      toast({
+        title: "Déconnexion réussie",
+        description: "À bientôt !"
+      });
+    } catch (error: any) {
+      setState(prev => ({ ...prev, loading: false, error: error.message }));
     }
   };
 
@@ -160,14 +230,18 @@ export const useAuth = () => {
     setState(prev => ({ ...prev, error: null }));
   };
 
-  return {
-    user: state.user,
-    loading: state.loading,
-    error: state.error,
-    login,
-    register,
-    logout,
+  const value: AuthContextType = {
+    ...state,
+    signIn,
+    signUp,
+    signOut,
     clearError,
-    isAuthenticated: !!state.user,
+    isAuthenticated: !!state.user
   };
-};
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
