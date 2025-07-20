@@ -73,6 +73,7 @@ export default function Home() {
   };
 
   return (
+    <>
       <header className="bg-card/95 backdrop-blur-md border-b border-border/50 sticky top-0 z-40">
         <div className="flex items-center justify-between p-4 mx-auto max-w-md">
           <div className="flex items-center gap-3">
@@ -212,5 +213,6 @@ export default function Home() {
         isOpen={showNotifications}
         onClose={() => setShowNotifications(false)}
       />
+    </>
   );
 }
