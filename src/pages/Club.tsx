@@ -636,3 +636,6 @@ export default function Club() {
 
     try {
       const post = posts.find(p => p.id === postId);
+    }
+  }
+}
