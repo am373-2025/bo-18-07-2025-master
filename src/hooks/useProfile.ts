@@ -98,6 +98,20 @@ export const useProfile = () => {
     setError(null);
 
     try {
+      // Ensure username is unique if being updated
+      if (updates.username && supabase) {
+        const { data: existingUser } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('username', updates.username)
+          .neq('id', user.id)
+          .single();
+          
+        if (existingUser) {
+          throw new Error('Ce nom d\'utilisateur est déjà pris');
+        }
+      }
+      
       const updatedData = await db.updateProfile(user.id, updates);
       setProfile(prev => prev ? { ...prev, ...updatedData } : null);
     } catch (err) {
