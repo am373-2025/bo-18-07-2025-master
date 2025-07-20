@@ -1,89 +1,22 @@
 import React from "react";
 import { useState, useEffect } from "react";
+import { Users, Plus } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Trophy } from "lucide-react";
+import { CreatePostForm } from "@/components/club/CreatePostForm";
+import { PostCard } from "@/components/club/PostCard";
 import { CommentModal } from "@/components/ui/comment-modal";
 import { ShareModal } from "@/components/ui/share-modal";
-import { PostActionsMenu } from "@/components/ui/post-actions-menu";
 import { LoginModal } from "@/components/ui/login-modal";
 import { CreatePollModal } from "@/components/ui/create-poll-modal";
 import { MediaUploadModal } from "@/components/ui/media-upload-modal";
 import { supabase } from "@/lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
-import { 
-  Heart, 
-  MessageCircle, 
-  Plus, 
-  Image, 
-  Video, 
-  BarChart3, 
-  Trophy, 
-  Users, 
-  Bookmark, 
-  Share2,
-  Edit3,
-  Play,
-  Send
-} from "lucide-react";
 
-// Interface pour les posts
-interface Post {
-  id: string;
-  user: {
-    id: string;
-    name: string;
-    avatar: string;
-    verified: boolean;
-  };
-  content: string;
-  image?: string;
-  video?: string;
-  poll?: {
-    question: string;
-    options: Array<{
-      text: string;
-      votes: number;
-      voted: boolean;
-    }>;
-  };
-  stats?: {
-    goals: number;
-    assists: number;
-    matches: number;
-  };
-  likes: number;
-  comments: number;
-  shares: number;
-  timestamp: string;
-  type: "post" | "poll" | "stats";
-  isLiked: boolean;
-  likedBy: string[];
-  isFavorite: boolean;
-  isReported: boolean;
-  canEdit?: boolean;
-}
-
-interface Comment {
-  id: string;
-  user_id: string;
-  post_id: string;
-  content: string;
-  likes: number;
-  created_at: string;
-  user?: {
-    name: string;
-    avatar: string;
-  };
-}
-
-// Données de test pour le feed initial
 const initialFeedData: Post[] = [
   {
     id: "demo-1",
@@ -981,120 +914,23 @@ export default function Club() {
         {/* Create/Edit Post */}
         {showCreatePost && (
           <Card className="card-golden overflow-hidden">
-            <CardHeader>
-              <h3 className="font-semibold text-gradient-gold">
-                {editingPost ? "Modifier la publication" : "Créer une publication"}
-              </h3>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Textarea
-                placeholder="Quoi de neuf dans le monde du football ?"
-                value={newPost}
-                onChange={(e) => setNewPost(e.target.value)}
-                className="min-h-[100px]"
-              />
-              
-              {/* Aperçu du fichier sélectionné */}
-              {selectedFile && (
-                <div className="border rounded-lg p-3 bg-muted/50 overflow-hidden">
-                  <div className="flex items-center gap-3">
-                    {selectedFileType === 'image' ? (
-                      <Image className="w-5 h-5 text-blue-500" />
-                    ) : (
-                      <Video className="w-5 h-5 text-red-500" />
-                    )}
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{selectedFile.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {(selectedFile.size / 1024 / 1024).toFixed(1)} MB
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        setSelectedFile(null);
-                        setSelectedFileType(null);
-                      }}
-                      className="flex-shrink-0"
-                    >
-                      ✕
-                    </Button>
-                  </div>
-                  
-                  {/* Aperçu image/vidéo */}
-                  {selectedFileType === 'image' && (
-                    <img 
-                      src={URL.createObjectURL(selectedFile)} 
-                      alt="Aperçu"
-                      className="w-full h-32 object-cover rounded mt-2 max-w-full"
-                      onError={(e) => {
-                        console.error('Preview image failed to load');
-                        e.currentTarget.style.display = 'none';
-                      }}
-                    />
-                  )}
-                  {selectedFileType === 'video' && (
-                    <div className="relative mt-2">
-                      <video 
-                        src={URL.createObjectURL(selectedFile)} 
-                        className="w-full h-32 object-cover rounded max-w-full"
-                        preload="metadata"
-                        controls
-                        onError={(e) => {
-                          console.error('Preview video failed to load');
-                          e.currentTarget.style.display = 'none';
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
-                </div>
-              )}
-              
-              <div className="flex items-center justify-between">
-                <div className="flex gap-1 flex-wrap">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setShowMediaModal(true)}
-                    className="text-xs flex-shrink-0"
-                  >
-                    <Image className="w-4 h-4 mr-2" />
-                    Photo/Vidéo
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setShowPollModal(true)}
-                    className="text-xs flex-shrink-0"
-                  >
-                    <BarChart3 className="w-4 h-4 mr-2" />
-                    Sondage
-                  </Button>
-                </div>
-                <div className="flex gap-1 ml-2 flex-shrink-0">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={resetCreateForm}
-                    className="text-xs"
-                  >
-                    Annuler
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="btn-golden"
-                    onClick={editingPost ? handleUpdatePost : handleCreatePost}
-                    disabled={(!newPost.trim() && !selectedFile) || loading}
-                  >
-                    {loading ? "..." : (editingPost ? "Modifier" : "Publier")}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        <CreatePostForm
+          isOpen={showCreatePost}
+          onClose={resetCreateForm}
+          post={newPost}
+          setPost={setNewPost}
+          onSubmit={editingPost ? handleUpdatePost : handleCreatePost}
+          onShowMedia={() => setShowMediaModal(true)}
+          onShowPoll={() => setShowPollModal(true)}
+          loading={loading}
+          selectedFile={selectedFile}
+          selectedFileType={selectedFileType}
+          onRemoveFile={() => {
+            setSelectedFile(null);
+            setSelectedFileType(null);
+          }}
+          editingPost={editingPost}
+        />
 
         {/* Feed */}
         <div className="space-y-4">
@@ -1103,242 +939,25 @@ export default function Club() {
               <CardContent className="p-4 space-y-4">
                 {/* Header */}
                 <div className="flex items-start gap-3">
-                  <Avatar 
-                    className="w-10 h-10 cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
-                    onClick={() => handleUserClick(post.user.id)}
-                  >
-                    <AvatarImage src={post.user.avatar} />
-                    <AvatarFallback>{post.user.name[0]}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 
-                        className="font-semibold text-sm cursor-pointer hover:text-primary transition-colors"
-                        onClick={() => handleUserClick(post.user.id)}
-                      >
-                        {post.user.name}
-                      </h3>
-                      {post.user.verified && (
-                        <Badge className="bg-primary text-primary-foreground text-xs px-2 py-0.5">
-                          <Trophy className="w-3 h-3 mr-1" />
-                          Vérifié
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground">{post.timestamp}</p>
-                  </div>
-                  <PostActionsMenu
-                    postId={post.id}
-                    isOwnPost={post.canEdit || false}
-                    onEdit={() => handleEditPost(post)}
-                    onDelete={() => handleDeletePost(post.id)}
-                    onFavorite={() => {
-                      toast({
-                        title: "Favoris",
-                        description: "Post ajouté aux favoris"
-                      });
-                    }}
-                    onReport={() => {
-                      toast({
-                        title: "Post signalé",
-                        description: "Cette publication a été signalée aux modérateurs."
-                      });
-                    }}
-                    onShare={() => handleShare(post)}
-                    isFavorited={post.isFavorite}
-                    isReported={post.isReported}
-                    playsInline
-                    preload="metadata"
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                    }}
-                  />
-                </div>
-
-                {/* Content */}
-                <div className="overflow-hidden">
-                  {post.content && (
-                    <p className="text-sm leading-relaxed mb-3 break-words">{post.content}</p>
-                  )}
-                  
-                  {post.image && (
-                    <img 
-                      src={post.image} 
-                      alt="Post image"
-                      className="w-full rounded-lg mb-3 max-w-full h-auto object-cover max-h-80"
-                      onError={(e) => {
-                        console.error('Image failed to load:', post.image);
-                        e.currentTarget.style.display = 'none';
-                      }}
-                    />
-                  )}
-
-                  {post.video && (
-                    <div className="relative mb-3">
-                      <video 
-                        src={post.video} 
-                        className="w-full rounded-lg max-w-full h-auto max-h-80"
-                        controls
-                        preload="metadata"
-                        onError={(e) => {
-                          console.error('Video failed to load:', post.video);
-                          e.currentTarget.style.display = 'none';
-                        }}
-                      />
-                    </div>
-                  )}
-
-                  {post.poll && (
-                    <div className="space-y-3 mb-3 overflow-hidden">
-                      <h4 className="font-semibold text-sm">{post.poll.question}</h4>
-                      <div className="space-y-2">
-                        {post.poll.options.map((option: any, optionIndex: number) => {
-                          const totalVotes = post.poll!.options.reduce((sum: number, opt: any) => sum + opt.votes, 0);
-                          const percentage = totalVotes > 0 ? Math.round((option.votes / totalVotes) * 100) : 0;
-                          
-                          return (
-                            <Button
-                              key={optionIndex}
-                              variant={option.voted ? "default" : "outline"}
-                              className="w-full justify-between p-3 h-auto text-left"
-                              onClick={() => handleVotePoll(post.id, optionIndex)}
-                            >
-                              <span className="text-sm truncate flex-1 mr-2">{option.text}</span>
-                              <div className="flex items-center gap-2 flex-shrink-0">
-                                <span className="text-xs">{option.votes}</span>
-                                <span className="text-xs text-muted-foreground">({percentage}%)</span>
-                              </div>
-                            </Button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {post.stats && (
-                    <div className="grid grid-cols-3 gap-3 mb-3">
-                      <div className="text-center bg-muted/50 rounded-lg p-3">
-                        <div className="text-lg font-bold text-primary">{post.stats.goals}</div>
-                        <div className="text-xs text-muted-foreground">Buts</div>
-                      </div>
-                      <div className="text-center bg-muted/50 rounded-lg p-3">
-                        <div className="text-lg font-bold text-primary">{post.stats.assists}</div>
-                        <div className="text-xs text-muted-foreground">Passes</div>
-                      </div>
-                      <div className="text-center bg-muted/50 rounded-lg p-3">
-                        <div className="text-lg font-bold text-primary">{post.stats.matches}</div>
-                        <div className="text-xs text-muted-foreground">Matchs</div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center justify-between pt-2 border-t border-border/50 gap-2">
-                  <div className="flex items-center gap-4">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleLike(post.id)}
-                      className={`flex items-center gap-1 ${post.isLiked ? 'text-red-500' : 'text-muted-foreground'}`}
-                    >
-                      <Heart 
-                        size={16} 
-                        className={post.isLiked ? 'fill-current' : ''}
-                      />
-                      <span className="text-xs">{post.likes}</span>
-                    </Button>
-                    
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowCommentInput(showCommentInput === post.id ? null : post.id)}
-                      className="flex items-center gap-1 text-muted-foreground"
-                    >
-                      <MessageCircle size={16} />
-                      <span className="text-xs">{post.comments}</span>
-                    </Button>
-                  </div>
-
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="text-muted-foreground flex-shrink-0"
-                    onClick={() => handleShare(post)}
-                  >
-                    <Share2 size={16} className="mr-1" />
-                    <span className="text-xs">{post.shares}</span>
-                  </Button>
-                </div>
-
-                {/* Quick Comment Input */}
-                {showCommentInput === post.id && (
-                  <div className="pt-3 border-t border-border/50 overflow-hidden">
-                    <div className="flex gap-2">
-                      <Avatar className="w-8 h-8">
-                        <AvatarImage src={profile?.avatar} />
-                        <AvatarFallback>{profile?.name?.[0] || 'U'}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 flex gap-2 min-w-0">
-                        <Input
-                          placeholder="Écrivez un commentaire..."
-                          value={commentInput}
-                          onChange={(e) => setCommentInput(e.target.value)}
-                          onKeyPress={(e) => {
-                            if (e.key === 'Enter' && commentInput.trim()) {
-                              handleAddComment(post.id, commentInput);
-                              setCommentInput("");
-                            }
-                          }}
-                          className="flex-1 min-w-0"
-                        />
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            if (commentInput.trim()) {
-                              handleAddComment(post.id, commentInput);
-                              setCommentInput("");
-                            }
-                          }}
-                          disabled={!commentInput.trim()}
-                          className="flex-shrink-0"
-                        >
-                          <Send className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Afficher les commentaires existants */}
-                    {postComments[post.id] && postComments[post.id].length > 0 && (
-                      <div className="mt-3 space-y-2 overflow-hidden">
-                        {postComments[post.id].slice(0, 3).map((comment) => (
-                          <div key={comment.id} className="flex gap-2 bg-muted/30 rounded-lg p-2">
-                            <Avatar className="w-6 h-6">
-                              <AvatarImage src={comment.user?.avatar} />
-                              <AvatarFallback>{comment.user?.name?.[0] || 'U'}</AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-medium">{comment.user?.name || 'Utilisateur'}</p>
-                              <p className="text-xs text-muted-foreground break-words">{comment.content}</p>
-                            </div>
-                          </div>
-                        ))}
-                        {postComments[post.id].length > 3 && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleComment(post)}
-                            className="text-xs"
-                          >
-                            Voir tous les {postComments[post.id].length} commentaires
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+          {posts.map((post) => (
+            <PostCard
+              key={post.id}
+              post={post}
+              currentUserId={currentUserId}
+              userProfile={profile}
+              onLike={handleLike}
+              onShare={handleShare}
+              onEdit={handleEditPost}
+              onDelete={handleDeletePost}
+              onVotePoll={handleVotePoll}
+              onUserClick={handleUserClick}
+              onAddComment={handleAddComment}
+              showCommentInput={showCommentInput}
+              setShowCommentInput={setShowCommentInput}
+              commentInput={commentInput}
+              setCommentInput={setCommentInput}
+              postComments={postComments}
+            />
           ))}
         </div>
 
@@ -1401,4 +1020,41 @@ export default function Club() {
       />
     </div>
   );
+}
+
+// Interface pour les posts
+interface Post {
+  id: string;
+  user: {
+    id: string;
+    name: string;
+    avatar: string;
+    verified: boolean;
+  };
+  content: string;
+  image?: string;
+  video?: string;
+  poll?: {
+    question: string;
+    options: Array<{
+      text: string;
+      votes: number;
+      voted: boolean;
+    }>;
+  };
+  stats?: {
+    goals: number;
+    assists: number;
+    matches: number;
+  };
+  likes: number;
+  comments: number;
+  shares: number;
+  timestamp: string;
+  type: "post" | "poll" | "stats";
+  isLiked: boolean;
+  likedBy: string[];
+  isFavorite: boolean;
+  isReported: boolean;
+  canEdit?: boolean;
 }
