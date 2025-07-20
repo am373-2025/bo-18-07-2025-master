@@ -457,7 +457,6 @@ export default function Chat() {
             </Card>
           ))}
         </div>
-        )}
 
         {/* Groupes populaires */}
         <div className="space-y-4">
@@ -514,7 +513,6 @@ export default function Chat() {
             ))}
           </div>
         </div>
-
       </main>
 
       {/* Modales */}

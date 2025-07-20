@@ -405,7 +405,7 @@ function MyTop() {
             src={player.photo} 
             alt={player.name}
             className="w-full h-3/4 object-cover"
-          />
+          </div>
           
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
           

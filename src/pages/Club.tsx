@@ -1045,7 +1045,6 @@ export default function Club() {
                           console.error('Preview video failed to load');
                           e.currentTarget.style.display = 'none';
                         }}
-                      />
                 </div>
               )}
               
@@ -1227,6 +1226,7 @@ export default function Club() {
                         <div className="text-xs text-muted-foreground">Matchs</div>
                       </div>
                     </div>
+                  )}
                 </div>
 
                 {/* Actions */}
