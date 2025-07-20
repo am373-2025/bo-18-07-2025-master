@@ -24,8 +24,9 @@ function MyTop() {
   const {
     data: playersData,
     loading,
-    error
-  } = useSupabaseTable<Player>('players', undefined, 'id, slug, name, position, club, photo, votes, country, age, ranking, trend');
+    error,
+    usingLocalStorage
+  } = useSupabaseTable<Player>('players', undefined, 'id, slug, name, position, club, photo, votes, country, age, ranking, trend, created_at, updated_at');
 
   // Déclencher les modals automatiquement selon le nombre de likes
   useEffect(() => {
@@ -130,8 +131,11 @@ function MyTop() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-neutral-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-white">Chargement des joueurs...</p>
+          <LoadingSpinner size="lg" className="mb-4" />
+          <p className="text-white text-lg">Chargement des candidats...</p>
+          <p className="text-white/70 text-sm mt-2">
+            {usingLocalStorage ? 'Mode hors ligne' : 'Connexion à la base de données'}
+          </p>
         </div>
       </div>
     );
@@ -140,9 +144,14 @@ function MyTop() {
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-neutral-900 flex items-center justify-center">
-        <div className="text-center text-red-400">
-          <p>Erreur: {error}</p>
-          <p className="text-sm mt-2">Vérifiez votre connexion</p>
+        <div className="text-center max-w-md mx-auto p-6">
+          <div className="bg-amber-500/20 border border-amber-500/50 rounded-lg p-4 mb-4">
+            <h3 className="text-amber-300 font-semibold mb-2">⚠️ Mode hors ligne</h3>
+            <p className="text-amber-200 text-sm">{error}</p>
+          </div>
+          <p className="text-white/70 text-sm">
+            L'application fonctionne avec des données locales
+          </p>
         </div>
       </div>
     );
