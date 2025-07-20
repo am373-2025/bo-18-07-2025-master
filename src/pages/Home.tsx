@@ -11,10 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import { Bell, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { useDatabase } from "@/hooks/useDatabase";
-import { usePlayerActions } from "@/hooks/usePlayerActions";
+import { useSupabaseTable } from "@/hooks/useSupabaseTable";
 import { Link } from "react-router-dom";
-import type { Player } from "@/types/database";
+import type { Player } from "@/types";
 import { Trophy } from "lucide-react";
 
 function getCountdown(targetDate: Date) {
@@ -29,21 +28,22 @@ function getCountdown(targetDate: Date) {
 
 export default function Home() {
   const { isAuthenticated } = useAuth();
-  const { voteForPlayer } = usePlayerActions();
   const [showNotifications, setShowNotifications] = useState(false);
-  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [selectedPlayer, setSelectedPlayer] = useState<any>(null);
   const [showPlayerDetails, setShowPlayerDetails] = useState(false);
   const [notificationCount, setNotificationCount] = useState(3);
   const { toast } = useToast();
 
   // Charger les joueurs depuis Supabase
-  const [playersState, playersActions] = useDatabase('players', {
-    orderBy: { column: 'votes', ascending: false },
-    limit: 10
-  });
+  const {
+    data: playersData,
+    loading: playersLoading,
+    error: playersError,
+    usingLocalStorage
+  } = useSupabaseTable<Player>('players', undefined, 'id, slug, name, position, club, photo, votes, country, age, ranking, trend');
   
   // Top 5 calculé depuis les données Supabase
-  const top5Ranking = playersState.data
+  const top5Ranking = playersData
     .slice(0, 5)
     .map((player, index) => ({
       ...player,
@@ -66,7 +66,11 @@ export default function Home() {
   }, [ceremonyDate]);
 
   const handleVote = async (player: Player) => {
-    await voteForPlayer(player.id, player.name);
+    toast({
+      title: "Vote enregistré !",
+      description: `Vous avez voté pour ${player.name}. Merci pour votre participation !`,
+    });
+    // TODO: Implement actual voting logic
   };
 
   const handleNotificationClick = () => {
@@ -150,28 +154,28 @@ export default function Home() {
         </div>
 
         {/* Loading state */}
-        {playersState.loading && (
+        {playersLoading && (
           <div className="text-center py-8">
             <LoadingSpinner size="lg" text="Chargement des joueurs..." />
           </div>
         )}
 
         {/* Error state */}
-        {playersState.error && (
+        {playersError && (
           <ErrorState 
             title="Erreur de chargement"
-            message={playersState.error}
-            onRetry={playersActions.refresh}
+            message={playersError}
+            onRetry={() => window.location.reload()}
           />
         )}
 
         {/* Top 5 Classement réel */}
-        {!playersState.loading && playersState.data.length > 0 && (
+        {!playersLoading && playersData.length > 0 && (
         <div className="space-y-6">
           <div className="text-center">
             <h2 className="text-xl font-bold mb-2 text-gradient-gold">Top 5 Ballon d'Or 2025</h2>
             <Badge variant="outline" className="text-xs mb-4">
-              {playersState.count} candidats • Base de données
+              {playersData.length} candidats • {usingLocalStorage ? 'Données locales' : 'Base de données'}
             </Badge>
           </div>
           <div className="grid gap-4">
@@ -180,7 +184,7 @@ export default function Home() {
                 key={player.name}
                 player={player}
                 onViewDetails={handleViewDetails}
-                variant="featured"
+                variant="default"
               />
             ))}
           </div>

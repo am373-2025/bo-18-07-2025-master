@@ -1,16 +1,11 @@
 import { useCallback } from 'react';
-import { useDatabase } from './useDatabase';
 import { useAuth } from './useAuth';
 import { useToast } from './use-toast';
-import type { UserVote, UserFavorite } from '@/types/database';
 
 export function usePlayerActions() {
   const { user } = useAuth();
   const { toast } = useToast();
   
-  const [, voteActions] = useDatabase('user_votes');
-  const [, favoriteActions] = useDatabase('user_favorites');
-  const [, playerActions] = useDatabase('players');
 
   const voteForPlayer = useCallback(async (playerId: string, playerName: string) => {
     if (!user) {
@@ -23,9 +18,9 @@ export function usePlayerActions() {
     }
 
     try {
-      // Vérifier si déjà voté
-      const existingVotes = JSON.parse(localStorage.getItem('ballondor_user_votes') || '[]');
-      const hasVoted = existingVotes.some((vote: UserVote) => 
+      // Vérifier si déjà voté dans localStorage
+      const existingVotes = JSON.parse(localStorage.getItem('userVotes') || '[]');
+      const hasVoted = existingVotes.some((vote: any) => 
         vote.user_id === user.id && vote.player_id === playerId
       );
 
@@ -38,19 +33,21 @@ export function usePlayerActions() {
         return false;
       }
 
-      // Enregistrer le vote
-      await voteActions.create({
-        user_id: user.id,
-        player_id: playerId,
-        player_name: playerName
+      // Enregistrer le vote dans localStorage
+      existingVotes.push({ 
+        user_id: user.id, 
+        player_id: playerId, 
+        player_name: playerName, 
+        created_at: new Date().toISOString() 
       });
+      localStorage.setItem('userVotes', JSON.stringify(existingVotes));
 
-      // Incrémenter les votes du joueur
-      const playersData = JSON.parse(localStorage.getItem('ballondor_players') || '[]');
+      // Incrémenter les votes du joueur dans localStorage
+      const playersData = JSON.parse(localStorage.getItem('table_players') || '[]');
       const updatedPlayers = playersData.map((p: any) => 
         p.id === playerId ? { ...p, votes: (p.votes || 0) + 1 } : p
       );
-      localStorage.setItem('ballondor_players', JSON.stringify(updatedPlayers));
+      localStorage.setItem('table_players', JSON.stringify(updatedPlayers));
 
       toast({
         title: "Vote enregistré !",
@@ -79,27 +76,32 @@ export function usePlayerActions() {
     }
 
     try {
-      // Vérifier si déjà en favoris
-      const existingFavorites = JSON.parse(localStorage.getItem('ballondor_user_favorites') || '[]');
-      const existingFavorite = existingFavorites.find((fav: UserFavorite) => 
+      // Vérifier si déjà en favoris dans localStorage
+      const existingFavorites = JSON.parse(localStorage.getItem('userFavorites') || '[]');
+      const existingFavorite = existingFavorites.find((fav: any) => 
         fav.user_id === user.id && fav.player_id === playerId
       );
 
       if (existingFavorite) {
-        // Retirer des favoris
-        await favoriteActions.remove(existingFavorite.id);
+        // Retirer des favoris dans localStorage
+        const updated = existingFavorites.filter((fav: any) => 
+          !(fav.user_id === user.id && fav.player_id === playerId)
+        );
+        localStorage.setItem('userFavorites', JSON.stringify(updated));
         toast({
           title: "Retiré des favoris",
           description: `${playerName} retiré de vos favoris`
         });
         return false;
       } else {
-        // Ajouter aux favoris
-        await favoriteActions.create({
+        // Ajouter aux favoris dans localStorage
+        existingFavorites.push({
           user_id: user.id,
           player_id: playerId,
-          player_name: playerName
+          player_name: playerName,
+          created_at: new Date().toISOString()
         });
+        localStorage.setItem('userFavorites', JSON.stringify(existingFavorites));
         toast({
           title: "Ajouté aux favoris",
           description: `${playerName} ajouté à vos favoris`
