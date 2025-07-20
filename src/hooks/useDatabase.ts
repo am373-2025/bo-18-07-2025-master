@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase, handleSupabaseError } from '@/lib/supabase';
 import type { SupabaseTable, SupabaseRow, SupabaseInsert, SupabaseUpdate } from '@/lib/supabase';
 import { useToast } from './use-toast';
-import { favoritePlayersNames } from '@/utils/ballonDorPlayers';
 
 interface DatabaseState<T> {
   data: T[];
@@ -41,34 +40,12 @@ export function useDatabase<T extends SupabaseTable>(
   const { toast } = useToast();
   const storageKey = `${STORAGE_PREFIX}${table}`;
 
-  // Fonction pour créer des données de démonstration pour les joueurs
-  const createDemoPlayersData = useCallback(() => {
-    if (table !== 'players') return [];
-    
-    return favoritePlayersNames.slice(0, 30).map((name, index) => ({
-      id: `player-${index + 1}`,
-      slug: name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
-      name,
-      position: ['Attaquant', 'Milieu', 'Défenseur', 'Gardien'][index % 4],
-      club: ['Real Madrid', 'PSG', 'Barcelona', 'Manchester City', 'Bayern Munich'][index % 5],
-      photo: `https://images.unsplash.com/photo-${1571019613454 + index}?w=400&h=300&fit=crop&face`,
-      votes: Math.floor(Math.random() * 10000) + 1000,
-      country: ['France', 'Espagne', 'Angleterre', 'Allemagne', 'Brésil'][index % 5],
-      age: 20 + (index % 15),
-      ranking: index + 1,
-      trend: ['up', 'down', 'stable'][index % 3],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }));
-  }, [table]);
   // Chargement initial des données
   const loadData = useCallback(async () => {
     setState(prev => ({ ...prev, loading: true, error: null }));
 
     if (supabase) {
       try {
-        console.log(`🔄 Tentative de chargement depuis Supabase pour table: ${table}`);
-        
         let query = supabase
           .from(table)
           .select(options?.select || '*', { count: 'exact' });
@@ -96,8 +73,6 @@ export function useDatabase<T extends SupabaseTable>(
 
         if (error) throw error;
 
-        console.log(`✅ Données Supabase chargées:`, { table, count, dataLength: data?.length });
-        
         setState({
           data: data as SupabaseRow<T>[],
           loading: false,
@@ -109,45 +84,24 @@ export function useDatabase<T extends SupabaseTable>(
         localStorage.setItem(storageKey, JSON.stringify(data));
 
       } catch (error: any) {
-        console.warn(`❌ Erreur Supabase pour ${table}:`, error);
+        const errorMessage = handleSupabaseError(error);
+        console.warn(`Supabase error for ${table}:`, errorMessage);
         
         // Fallback vers localStorage
-        let fallbackData = [];
-        
         const cached = localStorage.getItem(storageKey);
-        if (cached) {
-          fallbackData = JSON.parse(cached);
-          console.log(`📦 Données récupérées du cache localStorage:`, fallbackData.length);
-        } else if (table === 'players') {
-          // Créer des données de démonstration pour les joueurs
-          fallbackData = createDemoPlayersData();
-          localStorage.setItem(storageKey, JSON.stringify(fallbackData));
-          console.log(`🎭 Données de démonstration créées:`, fallbackData.length);
-        }
+        const fallbackData = cached ? JSON.parse(cached) : [];
         
         setState({
           data: fallbackData,
           loading: false,
-          error: `Mode hors ligne: ${handleSupabaseError(error)}`,
+          error: `Mode hors ligne: ${errorMessage}`,
           count: fallbackData.length
         });
       }
     } else {
       // Mode localStorage uniquement
-      console.log(`📱 Mode localStorage pour table: ${table}`);
-      
-      let data = [];
       const cached = localStorage.getItem(storageKey);
-      
-      if (cached) {
-        data = JSON.parse(cached);
-        console.log(`📦 Données localStorage trouvées:`, data.length);
-      } else if (table === 'players') {
-        // Créer des données de démonstration pour les joueurs
-        data = createDemoPlayersData();
-        localStorage.setItem(storageKey, JSON.stringify(data));
-        console.log(`🎭 Données de démonstration créées (localStorage):`, data.length);
-      }
+      const data = cached ? JSON.parse(cached) : [];
       
       setState({
         data,
@@ -156,7 +110,7 @@ export function useDatabase<T extends SupabaseTable>(
         count: data.length
       });
     }
-  }, [table, options, storageKey, createDemoPlayersData]);
+  }, [table, options, storageKey]);
 
   // Effet initial
   useEffect(() => {

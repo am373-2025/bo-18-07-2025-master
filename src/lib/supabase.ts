@@ -29,12 +29,9 @@ export const checkSupabaseHealth = async (): Promise<boolean> => {
   if (!supabase) return false;
   
   try {
-    // Test simple de connexion
-    const { data, error } = await supabase.from('players').select('id').limit(1);
-    console.log('🔍 Test connexion Supabase:', { error: error?.message, hasData: !!data });
+    const { error } = await supabase.from('profiles').select('id').limit(1);
     return !error;
   } catch {
-    console.warn('❌ Échec du test de connexion Supabase');
     return false;
   }
 };

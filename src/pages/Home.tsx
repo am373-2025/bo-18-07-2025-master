@@ -38,7 +38,7 @@ export default function Home() {
   // Charger les joueurs depuis Supabase
   const [playersState, playersActions] = useDatabase('players', {
     orderBy: { column: 'votes', ascending: false },
-    limit: 15
+    limit: 10
   });
   
   // Top 5 calculé depuis les données Supabase
@@ -73,7 +73,6 @@ export default function Home() {
   };
 
   return (
-    <>
       <header className="bg-card/95 backdrop-blur-md border-b border-border/50 sticky top-0 z-40">
         <div className="flex items-center justify-between p-4 mx-auto max-w-md">
           <div className="flex items-center gap-3">
@@ -150,26 +149,17 @@ export default function Home() {
         {/* Loading state */}
         {playersState.loading && (
           <div className="text-center py-8">
-            <LoadingSpinner size="lg" text="Chargement des candidats Ballon d'Or..." />
+            <LoadingSpinner size="lg" text="Chargement des joueurs..." />
           </div>
         )}
 
         {/* Error state */}
         {playersState.error && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
-            <div className="flex items-center gap-2 text-amber-800 mb-2">
-              <span className="text-sm font-medium">⚠️ Mode hors ligne</span>
-            </div>
-            <p className="text-xs text-amber-700">{playersState.error}</p>
-            <Button 
-              size="sm" 
-              variant="outline" 
-              onClick={playersActions.refresh}
-              className="mt-2 text-xs"
-            >
-              Réessayer la connexion
-            </Button>
-          </div>
+          <ErrorState 
+            title="Erreur de chargement"
+            message={playersState.error}
+            onRetry={playersActions.refresh}
+          />
         )}
 
         {/* Top 5 Classement réel */}
@@ -178,7 +168,7 @@ export default function Home() {
           <div className="text-center">
             <h2 className="text-xl font-bold mb-2 text-gradient-gold">Top 5 Ballon d'Or 2025</h2>
             <Badge variant="outline" className="text-xs mb-4">
-              {playersState.count} candidats • {playersState.error ? 'Mode hors ligne' : 'Base de données'}
+              {playersState.count} candidats • Base de données
             </Badge>
           </div>
           <div className="grid gap-4">
@@ -222,6 +212,5 @@ export default function Home() {
         isOpen={showNotifications}
         onClose={() => setShowNotifications(false)}
       />
-    </>
   );
 }

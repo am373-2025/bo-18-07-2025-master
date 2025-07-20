@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
 import { supabase, storage } from "@/lib/supabaseClient";
-import { LoadingSpinner } from '@/components/common/LoadingSpinner';
-import { favoritePlayersNames } from '@/utils/ballonDorPlayers';
 
 export function useSupabaseTable<T = any>(
   table: string, 
@@ -13,40 +11,16 @@ export function useSupabaseTable<T = any>(
   const [error, setError] = useState<string | null>(null);
   const [usingLocalStorage, setUsingLocalStorage] = useState(false);
 
-  // Fonction pour créer des données de démonstration
-  const createDemoData = (tableName: string) => {
-    if (tableName === 'players') {
-      return favoritePlayersNames.slice(0, 30).map((name, index) => ({
-        id: `demo-${index + 1}`,
-        slug: name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
-        name,
-        position: ['Attaquant', 'Milieu', 'Défenseur', 'Gardien'][index % 4],
-        club: ['Real Madrid', 'PSG', 'Barcelona', 'Manchester City', 'Bayern Munich'][index % 5],
-        photo: `https://images.unsplash.com/photo-${1571019613454 + (index * 1000)}?w=400&h=300&fit=crop&face`,
-        votes: Math.floor(Math.random() * 10000) + 1000,
-        country: ['France', 'Espagne', 'Angleterre', 'Allemagne', 'Brésil'][index % 5],
-        age: 20 + (index % 15),
-        ranking: index + 1,
-        trend: ['up', 'down', 'stable'][index % 3] as 'up' | 'down' | 'stable',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }));
-    }
-    return [];
-  };
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
       setError(null);
       setUsingLocalStorage(false);
 
-      console.log(`🔄 Chargement table: ${table}`);
-
       try {
         if (supabase) {
           try {
             // Try Supabase first
-            console.log(`📡 Tentative connexion Supabase pour: ${table}`);
             let query = supabase.from(table).select(columnsToSelect || '*');
             
             if (filter) {
@@ -60,61 +34,31 @@ export function useSupabaseTable<T = any>(
             if (supabaseError) {
               // Check if error is due to table not existing
               if (supabaseError.code === '42P01' || supabaseError.message.includes('does not exist')) {
-                console.warn(`❌ Table ${table} n'existe pas dans Supabase`);
+                console.warn(`Table ${table} does not exist in Supabase. Using localStorage fallback.`);
                 throw new Error('TABLE_NOT_EXISTS');
               }
               throw new Error(supabaseError.message);
             }
             
-            console.log(`✅ Données Supabase récupérées:`, { table, count: supabaseData?.length });
             setData(supabaseData || []);
           } catch (supabaseErr) {
             // If table doesn't exist or other Supabase error, fall back to localStorage
-            console.warn(`❌ Erreur Supabase ${table}:`, supabaseErr);
+            console.warn(`Supabase error for table ${table}:`, supabaseErr);
             setUsingLocalStorage(true);
-            
-            let stored = storage.get(`table_${table}`, []);
-            
-            // Si pas de données en cache et que c'est la table players, créer des données de démo
-            if (stored.length === 0 && table === 'players') {
-              stored = createDemoData(table);
-              storage.set(`table_${table}`, stored);
-              console.log(`🎭 Données de démonstration créées pour ${table}:`, stored.length);
-            }
-            
+            const stored = storage.get(`table_${table}`, []);
             setData(stored);
           }
         } else {
           // No Supabase configured, use localStorage
-          console.log(`📱 Mode localStorage pour ${table}`);
           setUsingLocalStorage(true);
-          
-          let stored = storage.get(`table_${table}`, []);
-          
-          // Si pas de données en cache et que c'est la table players, créer des données de démo
-          if (stored.length === 0 && table === 'players') {
-            stored = createDemoData(table);
-            storage.set(`table_${table}`, stored);
-            console.log(`🎭 Données de démonstration créées (localStorage) pour ${table}:`, stored.length);
-          }
-          
+          const stored = storage.get(`table_${table}`, []);
           setData(stored);
         }
       } catch (err) {
-        console.error(`❌ Erreur fatale lors du chargement ${table}:`, err);
+        console.warn(`Error fetching from table ${table}:`, err);
         setUsingLocalStorage(true);
-        
-        let stored = storage.get(`table_${table}`, []);
-        
-        // Dernière chance : créer des données de démo si besoin
-        if (stored.length === 0 && table === 'players') {
-          stored = createDemoData(table);
-          storage.set(`table_${table}`, stored);
-          console.log(`🎭 Données de démonstration créées (fallback) pour ${table}:`, stored.length);
-        }
-        
+        const stored = storage.get(`table_${table}`, []);
         setData(stored);
-        setError(`Erreur de chargement: ${err instanceof Error ? err.message : 'Erreur inconnue'}`);
       } finally {
         setLoading(false);
       }
