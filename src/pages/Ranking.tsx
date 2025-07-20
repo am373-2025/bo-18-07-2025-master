@@ -8,6 +8,7 @@ import { Trophy, Medal, Award, TrendingUp, Users, Newspaper } from "lucide-react
 import { useSupabaseTable } from "@/hooks/useSupabaseTable";
 import { PlayerDetailsModal } from "@/components/ui/player-details-modal";
 import type { Player } from "@/types";
+import { ballonDorFavorites2025, initializeBallonDorPlayers } from "@/data/ballonDorFavorites2025";
 
 // Fonction pour récupérer les votes utilisateurs depuis le localStorage
 function getUserVotesRanking() {
@@ -26,11 +27,28 @@ export default function Ranking() {
   
   // Charger les 30 joueurs depuis Supabase
   const {
-    data: playersData,
+    data: playersData = [],
     loading: loadingPlayers,
     error: playersError,
-    usingLocalStorage
+    usingLocalStorage,
+    insert
   } = useSupabaseTable<Player>('players', undefined, 'id, slug, name, position, club, photo, votes, country, age, ranking, trend');
+
+  // Initialiser les joueurs Ballon d'Or 2025 si la base est vide
+  useEffect(() => {
+    const initPlayers = async () => {
+      if (!loadingPlayers && playersData.length === 0) {
+        try {
+          await insert(ballonDorFavorites2025);
+          console.log('✅ Joueurs Ballon d\'Or 2025 initialisés');
+        } catch (error) {
+          console.error('Erreur initialisation joueurs:', error);
+        }
+      }
+    };
+    
+    initPlayers();
+  }, [loadingPlayers, playersData.length, insert]);
 
   // Créer les différents classements à partir des données Supabase
   const createRankings = (players: Player[]) => {
@@ -121,7 +139,10 @@ export default function Ranking() {
         <div className="p-4 max-w-md mx-auto">
           <div className="flex items-center justify-center gap-3 mb-4">
             <Trophy className="w-8 h-8 text-primary animate-glow" />
-            <h1 className="text-2xl font-bold text-gradient-gold">Classement</h1>
+            <div className="text-center">
+              <h1 className="text-2xl font-bold text-gradient-gold">Classement</h1>
+              <p className="text-xs text-muted-foreground">Ballon d'Or 2025 • 20 juillet</p>
+            </div>
           </div>
           
           {/* Tabs modernes avec animations fluides */}
@@ -169,7 +190,7 @@ export default function Ranking() {
         {loadingPlayers && (
           <div className="text-center py-8">
             <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-muted-foreground">Chargement des joueurs...</p>
+            <p className="text-muted-foreground">Chargement des favoris 2025...</p>
           </div>
         )}
 
@@ -178,7 +199,7 @@ export default function Ranking() {
           <div className="text-center py-8">
             <p className="text-destructive">Erreur: {playersError}</p>
             <p className="text-muted-foreground text-sm mt-2">
-              {usingLocalStorage ? 'Utilisation des données locales' : 'Vérifiez votre connexion'}
+              {usingLocalStorage ? 'Données locales • Juillet 2025' : 'Vérifiez votre connexion'}
             </p>
           </div>
         )}
@@ -249,11 +270,24 @@ export default function Ranking() {
             <div className="space-y-4">
               <div className="text-center mb-6">
                 <h2 className="text-xl font-bold text-gradient-gold mb-2">
-                  🏆 Podium des Favoris - {activeTab === 'community' ? 'Votes Communauté' : activeTab === 'media' ? 'Classement Médias' : 'Cotes Bookmakers'}
-                </h2>
-                <Badge variant="outline" className="text-xs">
-                  {currentRanking.length} candidats • {usingLocalStorage ? 'Données locales' : 'Données Supabase'}
-                </Badge>
+                  🏆 Favoris Ballon d'Or 2025 - {activeTab === 'community' ? 'Votes Communauté' : activeTab === 'media' ? 'Classement Médias' : 'Cotes Bookmakers'}
+                  <Badge variant="outline" className="text-xs">
+                    {currentRanking.length} candidats
+                  </Badge>
+                  <Badge className="bg-primary/10 text-primary text-xs">
+                    20 juillet 2025
+                  </Badge>
+                <div className="flex items-center justify-center gap-2">
+                  <Badge variant="outline" className="text-xs">
+                    {currentRanking.length} candidats
+                  </Badge>
+                  <Badge className="bg-green-500/10 text-green-600 text-xs">
+                    20 juillet 2025
+                  </Badge>
+                  <Badge variant="outline" className="text-xs">
+                    {usingLocalStorage ? 'Local' : 'Supabase'}
+                  </Badge>
+                </div>
               </div>
               <h2 className="text-xl font-bold text-center text-gradient-gold">
                 Top 3
@@ -410,7 +444,7 @@ export default function Ranking() {
             {/* Statistiques */}
             <Card className="card-golden">
               <CardContent className="p-4 text-center space-y-2">
-                <h3 className="font-bold text-gradient-gold">Statistiques des votes</h3>
+                <h3 className="font-bold text-gradient-gold">Statistiques Ballon d'Or 2025</h3>
                 <div className="grid grid-cols-3 gap-4 text-sm">
                   <div>
                     <div className="font-bold text-lg">
@@ -423,9 +457,14 @@ export default function Ranking() {
                     <div className="text-muted-foreground">Candidats</div>
                   </div>
                   <div>
-                    <div className="font-bold text-lg">Oct 30</div>
+                    <div className="font-bold text-lg">30 Oct</div>
                     <div className="text-muted-foreground">Cérémonie</div>
                   </div>
+                </div>
+                <div className="mt-3 pt-3 border-t border-border/50">
+                  <p className="text-xs text-muted-foreground">
+                    Dernière mise à jour: 20 juillet 2025
+                  </p>
                 </div>
               </CardContent>
             </Card>

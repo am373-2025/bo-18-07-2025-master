@@ -17,50 +17,10 @@ import { Link } from "react-router-dom";
 import { useSupabaseTable } from "@/hooks/useSupabaseTable";
 import type { Player } from "@/types";
 import { Trophy } from "lucide-react";
+import { ballonDorFavorites2025 } from "@/data/ballonDorFavorites2025";
 
 // Données de test pour les joueurs favoris
-const favoritePlayersData: Player[] = [
-  {
-    id: "1",
-    slug: "kylian-mbappe",
-    name: "Kylian Mbappé",
-    position: "Attaquant",
-    club: "Real Madrid",
-    photo: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&h=300&fit=crop",
-    votes: 12456,
-    isLiked: true
-  },
-  {
-    id: "2",
-    slug: "erling-haaland",
-    name: "Erling Haaland",
-    position: "Attaquant",
-    club: "Manchester City",
-    photo: "https://images.unsplash.com/photo-1556506751-69a7d6fb64dd?w=400&h=300&fit=crop",
-    votes: 11234,
-    isLiked: false
-  },
-  {
-    id: "3",
-    slug: "jude-bellingham",
-    name: "Jude Bellingham",
-    position: "Milieu",
-    club: "Real Madrid",
-    photo: "https://images.unsplash.com/photo-1543326727-cf6c39e8f84c?w=400&h=300&fit=crop",
-    votes: 9876,
-    isLiked: true
-  },
-  {
-    id: "4",
-    slug: "pedri-gonzalez",
-    name: "Pedri González",
-    position: "Milieu",
-    club: "FC Barcelone",
-    photo: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=400&h=300&fit=crop",
-    votes: 8765,
-    isLiked: false
-  }
-];
+const favoritePlayersData: Player[] = ballonDorFavorites2025.slice(0, 5);
 
 function getCountdown(targetDate: Date) {
   const now = new Date();
@@ -122,7 +82,7 @@ export default function Home() {
   // Initialize with sample data if empty
   useEffect(() => {
     if (!loadingSupabaseTable && playersData.length === 0) {
-      insert(favoritePlayersData).catch(console.error);
+      insert(ballonDorFavorites2025).catch(console.error);
     }
   }, [loadingSupabaseTable, playersData.length]);
 
@@ -194,7 +154,7 @@ export default function Home() {
             <Trophy className="w-10 h-10 text-primary animate-float" />
             <div>
               <h1 className="text-gradient-gold font-bold text-lg">Ballon d'Or</h1>
-              <p className="text-xs text-muted-foreground">2025</p>
+              <p className="text-xs text-muted-foreground">2025 • 20 juillet</p>
             </div>
           </div>
           
@@ -283,10 +243,18 @@ export default function Home() {
         {!loadingSupabaseTable && (
         <div className="space-y-6">
           <div className="text-center">
-            <h2 className="text-xl font-bold mb-2 text-gradient-gold">Top 5 Ballon d'Or 2025</h2>
-            <Badge variant="outline" className="text-xs mb-4">
-              {playersData.length} candidats • {usingLocalStorage ? 'Données locales' : 'Données Supabase'}
-            </Badge>
+            <h2 className="text-xl font-bold mb-2 text-gradient-gold">Top 5 Favoris 2025</h2>
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <Badge variant="outline" className="text-xs">
+                {playersData.length} candidats
+              </Badge>
+              <Badge className="bg-primary/10 text-primary text-xs">
+                20 juillet 2025
+              </Badge>
+              <Badge variant="outline" className="text-xs">
+                {usingLocalStorage ? 'Local' : 'Supabase'}
+              </Badge>
+            </div>
           </div>
           <div className="grid gap-4">
             {top5Ranking.map((player, index) => (
@@ -311,13 +279,13 @@ export default function Home() {
         {/* Call to Action */}
         <div className="bg-gradient-to-r from-muted to-card p-6 rounded-2xl text-center space-y-4 border border-border/50">
           <h3 className="text-xl font-bold text-gradient-gold">
-            Votre vote compte !
+            Votez pour le Ballon d'Or 2025 !
           </h3>
           <p className="text-sm text-muted-foreground">
-            Rejoignez des milliers de fans et votez pour le prochain Ballon d'Or
+            Découvrez les 30 favoris et participez au classement communautaire
           </p>
           <Link to="/ranking" className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 btn-golden w-full">
-            Découvrir tous les candidats
+            Voir le classement complet
           </Link>
         </div>
       </main>

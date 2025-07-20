@@ -9,6 +9,7 @@ import { useSupabaseTable } from "@/hooks/useSupabaseTable";
 import { Player, SharedTop } from '@/types/types';
 import { Trophy, Heart, Sparkles, Users, TrendingUp, Flame } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { ballonDorFavorites2025 } from "@/data/ballonDorFavorites2025";
 
 function MyTop() {
   const [likedPlayers, setLikedPlayers] = useState<Player[]>([]);
@@ -22,10 +23,27 @@ function MyTop() {
 
   // Charger les joueurs depuis Supabase
   const {
-    data: playersData,
+    data: playersData = [],
     loading,
-    error
+    error,
+    insert
   } = useSupabaseTable<Player>('players', undefined, 'id, slug, name, position, club, photo, votes, country, age, ranking, trend');
+
+  // Initialiser les joueurs si la base est vide
+  useEffect(() => {
+    const initPlayers = async () => {
+      if (!loading && playersData.length === 0) {
+        try {
+          await insert(ballonDorFavorites2025);
+          console.log('✅ Joueurs Ballon d\'Or 2025 initialisés pour MyTop');
+        } catch (error) {
+          console.error('Erreur initialisation joueurs MyTop:', error);
+        }
+      }
+    };
+    
+    initPlayers();
+  }, [loading, playersData.length, insert]);
 
   // Déclencher les modals automatiquement selon le nombre de likes
   useEffect(() => {
