@@ -33,7 +33,7 @@ export const getCurrentUser = async () => {
     if (error) throw error;
     return user;
   } catch (error) {
-    console.error('Error getting current user:', error);
+    console.warn('Auth session missing - using localStorage fallback');
     return null;
   }
 };

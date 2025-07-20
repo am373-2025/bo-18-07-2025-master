@@ -68,6 +68,9 @@ export const PlayerDetailsModal = ({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-md mx-auto max-h-[90vh] overflow-y-auto p-0 bg-background border-border">
+        <DialogTitle className="sr-only">
+          Détails du joueur {player.name}
+        </DialogTitle>
         <DialogDescription className="sr-only">
           Détails complets du joueur sélectionné
         </DialogDescription>

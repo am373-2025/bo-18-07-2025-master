@@ -636,6 +636,13 @@ export default function Club() {
 
     try {
       const post = posts.find(p => p.id === postId);
+    } catch (error) {
+      console.error('Error handling favorite post:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de gérer les favoris.",
+        variant: "destructive"
+      });
     }
   }
 }
