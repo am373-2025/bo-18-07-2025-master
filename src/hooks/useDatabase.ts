@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, handleSupabaseError } from '@/lib/supabase';
+import { supabase, handleSupabaseError, isSupabaseWorking, setSupabaseWorking } from '@/lib/supabase';
 import type { SupabaseTable, SupabaseRow, SupabaseInsert, SupabaseUpdate } from '@/lib/supabase';
 import { useToast } from './use-toast';
 
@@ -44,7 +44,8 @@ export function useDatabase<T extends SupabaseTable>(
   const loadData = useCallback(async () => {
     setState(prev => ({ ...prev, loading: true, error: null }));
 
-    if (supabase) {
+    // Skip Supabase if we know it's not working
+    if (supabase && isSupabaseWorking()) {
       try {
         let query = supabase
           .from(table)
@@ -69,12 +70,16 @@ export function useDatabase<T extends SupabaseTable>(
           query = query.limit(options.limit);
         }
 
+        // Add timeout and network error handling
         const { data, error, count } = await Promise.race([
-          query,
+          query.then(result => {
+            setSupabaseWorking(true); // Mark as working if successful
+            return result;
+          }),
           new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Supabase timeout')), 10000)
+            setTimeout(() => reject(new Error('Network timeout')), 8000)
           )
-        ]);
+        ]) as any;
 
         if (error) throw error;
 
@@ -89,7 +94,10 @@ export function useDatabase<T extends SupabaseTable>(
         localStorage.setItem(storageKey, JSON.stringify(data));
 
       } catch (error: any) {
-        console.warn(`Supabase error for ${table}:`, error.message || error);
+        // Mark Supabase as not working for network errors
+        if (error.message?.includes('Failed to fetch') || error.name === 'TypeError') {
+          setSupabaseWorking(false);
+        }
         
         // Fallback vers localStorage
         const cached = localStorage.getItem(storageKey);
@@ -123,7 +131,7 @@ export function useDatabase<T extends SupabaseTable>(
 
   // Actions CRUD
   const create = useCallback(async (data: SupabaseInsert<T>): Promise<SupabaseRow<T> | null> => {
-    if (supabase) {
+    if (supabase && isSupabaseWorking()) {
       try {
         const { data: result, error } = await supabase
           .from(table)
@@ -141,38 +149,43 @@ export function useDatabase<T extends SupabaseTable>(
 
         return result;
       } catch (error: any) {
-        toast({
-          title: "Erreur de création",
-          description: handleSupabaseError(error),
-          variant: "destructive"
-        });
-        return null;
+        // Handle network errors silently and fall back to localStorage
+        if (error.message?.includes('Failed to fetch')) {
+          setSupabaseWorking(false);
+        } else {
+          toast({
+            title: "Erreur de création",
+            description: handleSupabaseError(error),
+            variant: "destructive"
+          });
+          return null;
+        }
       }
-    } else {
-      // Fallback localStorage
-      const newItem = {
-        ...data,
-        id: crypto.randomUUID(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      } as SupabaseRow<T>;
-
-      const current = state.data;
-      const updated = [newItem, ...current];
-      
-      setState(prev => ({
-        ...prev,
-        data: updated,
-        count: updated.length
-      }));
-      
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-      return newItem;
     }
+    
+    // Fallback localStorage (when Supabase is null or not working)
+    const newItem = {
+      ...data,
+      id: crypto.randomUUID(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    } as SupabaseRow<T>;
+
+    const current = state.data;
+    const updated = [newItem, ...current];
+    
+    setState(prev => ({
+      ...prev,
+      data: updated,
+      count: updated.length
+    }));
+    
+    localStorage.setItem(storageKey, JSON.stringify(updated));
+    return newItem;
   }, [table, state.data, storageKey, toast]);
 
   const update = useCallback(async (id: string, data: SupabaseUpdate<T>): Promise<SupabaseRow<T> | null> => {
-    if (supabase) {
+    if (supabase && isSupabaseWorking()) {
       try {
         const { data: result, error } = await supabase
           .from(table)
@@ -190,30 +203,34 @@ export function useDatabase<T extends SupabaseTable>(
 
         return result;
       } catch (error: any) {
-        toast({
-          title: "Erreur de mise à jour",
-          description: handleSupabaseError(error),
-          variant: "destructive"
-        });
-        return null;
+        if (error.message?.includes('Failed to fetch')) {
+          setSupabaseWorking(false);
+        } else {
+          toast({
+            title: "Erreur de mise à jour",
+            description: handleSupabaseError(error),
+            variant: "destructive"
+          });
+          return null;
+        }
       }
-    } else {
-      // Fallback localStorage
-      const updated = state.data.map(item => 
-        item.id === id 
-          ? { ...item, ...data, updated_at: new Date().toISOString() }
-          : item
-      );
-      
-      setState(prev => ({ ...prev, data: updated }));
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-      
-      return updated.find(item => item.id === id) || null;
     }
+    
+    // Fallback localStorage
+    const updated = state.data.map(item => 
+      item.id === id 
+        ? { ...item, ...data, updated_at: new Date().toISOString() }
+        : item
+    );
+    
+    setState(prev => ({ ...prev, data: updated }));
+    localStorage.setItem(storageKey, JSON.stringify(updated));
+    
+    return updated.find(item => item.id === id) || null;
   }, [table, state.data, storageKey, toast]);
 
   const remove = useCallback(async (id: string): Promise<boolean> => {
-    if (supabase) {
+    if (supabase && isSupabaseWorking()) {
       try {
         const { error } = await supabase
           .from(table)
@@ -230,20 +247,24 @@ export function useDatabase<T extends SupabaseTable>(
 
         return true;
       } catch (error: any) {
-        toast({
-          title: "Erreur de suppression",
-          description: handleSupabaseError(error),
-          variant: "destructive"
-        });
-        return false;
+        if (error.message?.includes('Failed to fetch')) {
+          setSupabaseWorking(false);
+        } else {
+          toast({
+            title: "Erreur de suppression",
+            description: handleSupabaseError(error),
+            variant: "destructive"
+          });
+          return false;
+        }
       }
-    } else {
-      // Fallback localStorage
-      const updated = state.data.filter(item => item.id !== id);
-      setState(prev => ({ ...prev, data: updated, count: updated.length }));
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-      return true;
     }
+    
+    // Fallback localStorage
+    const updated = state.data.filter(item => item.id !== id);
+    setState(prev => ({ ...prev, data: updated, count: updated.length }));
+    localStorage.setItem(storageKey, JSON.stringify(updated));
+    return true;
   }, [table, state.data, storageKey, toast]);
 
   const subscribe = useCallback((callback: (payload: any) => void): (() => void) => {

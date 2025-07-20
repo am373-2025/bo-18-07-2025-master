@@ -4,10 +4,25 @@ import type { Database } from '@/types/database';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Vérification de la configuration
-const isValidConfig = supabaseUrl && supabaseKey && 
-  supabaseUrl.startsWith('https://') && 
-  supabaseKey.length > 20;
+// Enhanced configuration validation
+const isValidConfig = (() => {
+  if (!supabaseUrl || !supabaseKey) {
+    console.warn('⚠️ Supabase environment variables not set');
+    return false;
+  }
+  
+  if (!supabaseUrl.startsWith('https://') || !supabaseUrl.includes('supabase.co')) {
+    console.warn('⚠️ Invalid Supabase URL format');
+    return false;
+  }
+  
+  if (supabaseKey.length < 20) {
+    console.warn('⚠️ Invalid Supabase key format');
+    return false;
+  }
+  
+  return true;
+})();
 
 export const supabase = isValidConfig 
   ? createClient<Database>(supabaseUrl, supabaseKey, {
@@ -24,19 +39,12 @@ export const supabase = isValidConfig
     })
   : null;
 
-// Vérification de la santé de Supabase
-export const checkSupabaseHealth = async (): Promise<boolean> => {
-  if (!supabase) return false;
-  
-  try {
-    const { error } = await Promise.race([
-      supabase.from('profiles').select('id').limit(1),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
-    ]);
-    return !error;
-  } catch {
-    return false;
-  }
+// Track if Supabase is working
+let supabaseWorking = isValidConfig;
+
+export const isSupabaseWorking = () => supabaseWorking;
+export const setSupabaseWorking = (working: boolean) => {
+  supabaseWorking = working;
 };
 
 // Gestion des erreurs Supabase
@@ -45,7 +53,8 @@ export const handleSupabaseError = (error: any): string => {
   
   // Handle network errors
   if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
-    return 'Connexion Supabase indisponible (mode hors ligne activé)';
+    setSupabaseWorking(false);
+    return 'Mode hors ligne activé';
   }
   
   const errorMessages: Record<string, string> = {
