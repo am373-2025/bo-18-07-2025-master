@@ -1020,12 +1020,12 @@ export default function Club() {
               )}
               
               <div className="flex items-center justify-between">
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-1 flex-wrap">
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => setShowMediaModal(true)}
-                    className="text-xs"
+                    className="text-xs flex-shrink-0"
                   >
                     <Image className="w-4 h-4 mr-2" />
                     Photo/Vidéo
@@ -1034,20 +1034,23 @@ export default function Club() {
                     size="sm"
                     variant="outline"
                     onClick={() => setShowPollModal(true)}
-                    className="text-xs"
+                    className="text-xs flex-shrink-0"
                   >
                     <BarChart3 className="w-4 h-4 mr-2" />
                     Sondage
                   </Button>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-1 ml-2 flex-shrink-0">
                   <Button
+                    size="sm"
                     variant="outline"
                     onClick={resetCreateForm}
+                    className="text-xs"
                   >
                     Annuler
                   </Button>
                   <Button
+                    size="sm"
                     className="btn-golden"
                     onClick={editingPost ? handleUpdatePost : handleCreatePost}
                     disabled={(!newPost.trim() && !selectedFile) || loading}
