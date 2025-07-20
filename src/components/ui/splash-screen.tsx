@@ -4,12 +4,22 @@ import ballonDorIcon from "@/assets/ballon-dor-icon.png";
 
 interface SplashScreenProps {
   onFinish: () => void;
+  supabaseStatus?: boolean | null;
 }
 
-export const SplashScreen = ({ onFinish }: SplashScreenProps) => {
+export const SplashScreen = ({ onFinish, supabaseStatus }: SplashScreenProps) => {
   const [progress, setProgress] = useState(0);
+  const [currentStatus, setCurrentStatus] = useState("Initialisation...");
 
   useEffect(() => {
+    const statusMessages = [
+      "Connexion aux serveurs...",
+      "Vérification de Supabase...",
+      "Chargement des données...",
+      "Configuration de l'interface...",
+      "Finalisation..."
+    ];
+    
     const timer = setInterval(() => {
       setProgress((prev) => {
         if (prev >= 100) {
@@ -17,12 +27,29 @@ export const SplashScreen = ({ onFinish }: SplashScreenProps) => {
           setTimeout(onFinish, 500); // Délai avant de finir
           return 100;
         }
-        return prev + 2;
+        
+        const newProgress = prev + 3;
+        const statusIndex = Math.floor(newProgress / 20);
+        if (statusIndex < statusMessages.length) {
+          setCurrentStatus(statusMessages[statusIndex]);
+        }
+        
+        return newProgress;
       });
     }, 50);
 
     return () => clearInterval(timer);
   }, [onFinish]);
+  
+  useEffect(() => {
+    if (supabaseStatus !== null) {
+      setCurrentStatus(
+        supabaseStatus 
+          ? "✅ Base de données connectée" 
+          : "⚠️ Mode hors ligne activé"
+      );
+    }
+  }, [supabaseStatus]);
 
   return (
     <div className="fixed inset-0 bg-background z-50 flex items-center justify-center">
@@ -63,25 +90,16 @@ export const SplashScreen = ({ onFinish }: SplashScreenProps) => {
 
         {/* Messages de chargement */}
         <div className="space-y-2 animate-pulse">
-          {progress < 30 && (
-            <p className="text-sm text-muted-foreground">
-              Connexion aux serveurs...
-            </p>
-          )}
-          {progress >= 30 && progress < 60 && (
-            <p className="text-sm text-muted-foreground">
-              Chargement des favoris...
-            </p>
-          )}
-          {progress >= 60 && progress < 90 && (
-            <p className="text-sm text-muted-foreground">
-              Synchronisation des votes...
-            </p>
-          )}
-          {progress >= 90 && (
-            <p className="text-sm text-primary font-medium">
-              Prêt ! ⚽
-            </p>
+          <p className="text-sm text-muted-foreground">
+            {currentStatus}
+          </p>
+          {supabaseStatus !== null && (
+            <div className="flex items-center justify-center gap-2 text-xs">
+              <div className={`w-2 h-2 rounded-full ${supabaseStatus ? 'bg-green-500' : 'bg-yellow-500'}`} />
+              <span className={supabaseStatus ? 'text-green-600' : 'text-yellow-600'}>
+                {supabaseStatus ? 'Base de données' : 'Mode local'}
+              </span>
+            </div>
           )}
         </div>
       </div>

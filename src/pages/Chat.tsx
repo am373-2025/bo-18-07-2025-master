@@ -51,6 +51,7 @@ export default function Chat() {
   const [message, setMessage] = useState("");
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [groups, setGroups] = useState<any[]>([]);
   const [showNewChatModal, setShowNewChatModal] = useState(false);
   const [showMediaModal, setShowMediaModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
@@ -58,112 +59,250 @@ export default function Chat() {
   const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
 
-  // Charger les messages depuis Supabase
-  const { data: userMessages, loading: messagesLoading } = useSupabaseTable<Message>(
-    'user_messages',
-    user ? { receiver_id: user.id } : undefined
+  // Load chat messages from new unified table
+  const { data: chatMessages, loading: messagesLoading } = useSupabaseTable(
+    'chat_messages',
+    user ? {} : undefined,
+    'id, sender_id, group_id, receiver_id, content, message_type, media_url, is_read, created_at, profiles!chat_messages_sender_id_fkey(name, avatar)'
+  );
+  
+  // Load public chat groups
+  const { data: publicGroups, loading: groupsLoading } = useSupabaseTable(
+    'chat_groups',
+    { is_public: true },
+    'id, name, description, avatar, member_count, created_at'
   );
 
-  // Charger les conversations depuis les messages
+  // Load user's group memberships
+  const { data: userGroups } = useSupabaseTable(
+    'chat_group_members',
+    user ? { user_id: user.id } : undefined,
+    'group_id, chat_groups(id, name, description, avatar, member_count)'
+  );
+
+  // Process messages into conversations
   useEffect(() => {
-    if (!userMessages || !user) return;
+    if (!chatMessages || !user) return;
 
     const conversationMap = new Map<string, Conversation>();
     
-    userMessages.forEach(msg => {
-      const otherUserId = msg.sender_id === user.id ? msg.receiver_id : msg.sender_id;
-      
-      if (!conversationMap.has(otherUserId)) {
-        conversationMap.set(otherUserId, {
-          id: otherUserId,
-          type: 'private',
-          name: msg.sender?.name || 'Utilisateur',
-          avatar: msg.sender?.avatar || '/placeholder.svg',
-          lastMessage: msg.content,
-          timestamp: new Date(msg.created_at).toLocaleTimeString('fr-FR', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
-          }),
-          unread: msg.is_read ? 0 : 1,
-          online: false
-        });
-      }
-    });
+    // Process private messages
+    chatMessages
+      .filter(msg => !msg.group_id && (msg.sender_id === user.id || msg.receiver_id === user.id))
+      .forEach(msg => {
+        const otherUserId = msg.sender_id === user.id ? msg.receiver_id : msg.sender_id;
+        
+        if (otherUserId && !conversationMap.has(otherUserId)) {
+          conversationMap.set(otherUserId, {
+            id: otherUserId,
+            type: 'private',
+            name: (msg as any).profiles?.name || 'Utilisateur',
+            avatar: (msg as any).profiles?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
+            lastMessage: msg.content,
+            timestamp: new Date(msg.created_at).toLocaleTimeString('fr-FR', { 
+              hour: '2-digit', 
+              minute: '2-digit' 
+            }),
+            unread: msg.is_read ? 0 : 1,
+            online: false
+          });
+        }
+      });
+    
+    // Add user's groups as conversations
+    if (userGroups) {
+      userGroups.forEach((membership: any) => {
+        const group = membership.chat_groups;
+        if (group) {
+          conversationMap.set(group.id, {
+            id: group.id,
+            type: 'group',
+            name: group.name,
+            avatar: group.avatar || 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=100&h=100&fit=crop',
+            lastMessage: 'Groupe rejoint',
+            timestamp: 'récemment',
+            unread: 0,
+            participants: group.member_count
+          });
+        }
+      });
+    }
 
     setConversations(Array.from(conversationMap.values()));
-  }, [userMessages, user]);
+  }, [chatMessages, user, userGroups]);
 
-  // Charger les messages de la conversation sélectionnée
+  // Load public groups for discovery
   useEffect(() => {
-    if (!selectedChat || !user) return;
+    if (publicGroups) {
+      setGroups(publicGroups.map(group => ({
+        id: group.id,
+        name: group.name,
+        members: `${group.member_count} membres`,
+        avatar: group.avatar || 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=100&h=100&fit=crop',
+        description: group.description
+      })));
+    }
+  }, [publicGroups]);
 
-    const chatMessages = userMessages?.filter(msg => 
-      (msg.sender_id === user.id && msg.receiver_id === selectedChat) ||
-      (msg.sender_id === selectedChat && msg.receiver_id === user.id)
-    ) || [];
+  // Load messages for selected chat
+  useEffect(() => {
+    if (!selectedChat || !user || !chatMessages) return;
 
-    setMessages(chatMessages);
-  }, [selectedChat, userMessages, user]);
+    let filteredMessages = [];
+    
+    // Check if it's a group or private chat
+    const isGroup = conversations.find(c => c.id === selectedChat)?.type === 'group';
+    
+    if (isGroup) {
+      // Group messages
+      filteredMessages = chatMessages.filter(msg => msg.group_id === selectedChat);
+    } else {
+      // Private messages
+      filteredMessages = chatMessages.filter(msg => 
+        !msg.group_id && (
+          (msg.sender_id === user.id && msg.receiver_id === selectedChat) ||
+          (msg.sender_id === selectedChat && msg.receiver_id === user.id)
+        )
+      );
+    }
 
-  const handleSendMessage = () => {
-    if (message.trim() && user && selectedChat) {
-      sendMessage(user.id, selectedChat, message);
+    setMessages(filteredMessages);
+  }, [selectedChat, chatMessages, user, conversations]);
+
+  const joinGroup = async (groupId: string, groupName: string) => {
+    if (!user) {
+      toast({
+        title: "Connexion requise",
+        description: "Connectez-vous pour rejoindre des groupes",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      if (supabase) {
+        // Check if already member
+        const { data: existing } = await supabase
+          .from('chat_group_members')
+          .select('id')
+          .eq('group_id', groupId)
+          .eq('user_id', user.id)
+          .single();
+
+        if (existing) {
+          toast({
+            title: "Déjà membre",
+            description: "Vous êtes déjà membre de ce groupe"
+          });
+          return;
+        }
+
+        // Join the group
+        const { error } = await supabase
+          .from('chat_group_members')
+          .insert([{
+            group_id: groupId,
+            user_id: user.id,
+            role: 'member'
+          }]);
+
+        if (error) throw error;
+
+        toast({
+          title: `👥 ${groupName}`,
+          description: "Vous avez rejoint le groupe avec succès !"
+        });
+
+        // Refresh conversations to include new group
+        window.location.reload();
+      } else {
+        // localStorage fallback
+        const newConversation = {
+          id: groupId,
+          type: "group" as const,
+          name: groupName,
+          avatar: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=100&h=100&fit=crop',
+          lastMessage: "Vous avez rejoint le groupe",
+          timestamp: "maintenant",
+          unread: 0,
+          participants: Math.floor(Math.random() * 1000) + 100
+        };
+        setConversations([newConversation, ...conversations]);
+        
+        toast({
+          title: `👥 ${groupName}`,
+          description: "Vous avez rejoint le groupe (mode démo)"
+        });
+      }
+    } catch (error) {
+      console.error('Error joining group:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de rejoindre le groupe",
+        variant: "destructive"
+      });
     }
   };
 
-  const sendMessage = async (senderId: string, receiverId: string, content: string) => {
+  const sendMessage = async (content: string) => {
+    if (!content.trim() || !user || !selectedChat) return;
+
+    const conversation = conversations.find(c => c.id === selectedChat);
+    if (!conversation) return;
+
     try {
       if (supabase) {
+        const messageData: any = {
+          sender_id: user.id,
+          content: content.trim(),
+          message_type: 'text',
+          is_read: false
+        };
+
+        if (conversation.type === 'group') {
+          messageData.group_id = selectedChat;
+        } else {
+          messageData.receiver_id = selectedChat;
+        }
+
         const { data, error } = await supabase
-          .from('user_messages')
-          .insert([{
-            sender_id: senderId,
-            receiver_id: receiverId,
-            content,
-            is_read: false
-          }])
-          .select()
+          .from('chat_messages')
+          .insert([messageData])
+          .select('*, profiles!chat_messages_sender_id_fkey(name, avatar)')
           .single();
 
         if (error) throw error;
 
-        // Ajouter le message à l'état local
+        // Add message to local state
         setMessages(prev => [...prev, data]);
+        setMessage("");
+        
+        toast({
+          title: "Message envoyé",
+          description: "Votre message a été envoyé avec succès"
+        });
       } else {
-        // Fallback localStorage
-        const stored = JSON.parse(localStorage.getItem('userMessages') || '[]');
+        // localStorage fallback
         const newMessage = {
           id: crypto.randomUUID(),
-          sender_id: senderId,
-          receiver_id: receiverId,
-          content,
+          sender_id: user.id,
+          receiver_id: conversation.type === 'private' ? selectedChat : undefined,
+          group_id: conversation.type === 'group' ? selectedChat : undefined,
+          content: content.trim(),
+          message_type: 'text',
           is_read: false,
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         };
-        stored.push(newMessage);
-        localStorage.setItem('userMessages', JSON.stringify(stored));
+        
         setMessages(prev => [...prev, newMessage]);
+        setMessage("");
+        
+        toast({
+          title: "Message envoyé (mode démo)",
+          description: "Votre message a été envoyé en mode local"
+        });
       }
-
-      const newMessage = {
-        id: crypto.randomUUID(),
-        sender_id: senderId,
-        receiver_id: receiverId,
-        content,
-        is_read: false,
-        created_at: new Date().toISOString(),
-        timestamp: new Date().toLocaleTimeString("fr-FR", { 
-          hour: "2-digit", 
-          minute: "2-digit" 
-        })
-      };
-      
-      setMessage("");
-      
-      toast({
-        title: "Message envoyé",
-        description: "Votre message a été envoyé avec succès"
-      });
     } catch (error) {
       console.error('Error sending message:', error);
       toast({
@@ -171,6 +310,12 @@ export default function Chat() {
         description: "Impossible d'envoyer le message",
         variant: "destructive"
       });
+    }
+  };
+
+  const handleSendMessage = () => {
+    if (message.trim()) {
+      sendMessage(message);
     }
   };
 
@@ -407,78 +552,68 @@ export default function Chat() {
               </div>
             )}
             
-          {conversations.map((conversation, index) => (
-            <Card
-              key={conversation.id}
-              className="card-golden cursor-pointer hover:scale-[1.02] transition-all duration-200 animate-slide-up"
-              style={{ animationDelay: `${index * 100}ms` }}
-              onClick={() => setSelectedChat(conversation.id)}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <Avatar className="w-12 h-12">
-                      <AvatarImage src={conversation.avatar} alt={conversation.name} />
-                      <AvatarFallback>{conversation.name.slice(0, 2)}</AvatarFallback>
-                    </Avatar>
-                    {conversation.type === "private" && conversation.online && (
-                      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-background" />
-                    )}
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold text-sm truncate">
-                        {conversation.name}
-                      </h3>
-                      <span className="text-xs text-muted-foreground">
-                        {conversation.timestamp}
-                      </span>
+            {conversations.map((conversation, index) => (
+              <Card
+                key={conversation.id}
+                className="card-golden cursor-pointer hover:scale-[1.02] transition-all duration-200 animate-slide-up"
+                style={{ animationDelay: `${index * 100}ms` }}
+                onClick={() => setSelectedChat(conversation.id)}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <Avatar className="w-12 h-12">
+                        <AvatarImage src={conversation.avatar} alt={conversation.name} />
+                        <AvatarFallback>{conversation.name.slice(0, 2)}</AvatarFallback>
+                      </Avatar>
+                      {conversation.type === "private" && conversation.online && (
+                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-background" />
+                      )}
                     </div>
                     
-                    <p className="text-sm text-muted-foreground truncate mt-1">
-                      {conversation.lastMessage}
-                    </p>
-                    
-                    {conversation.type === "group" && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {conversation.participants} participants
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold text-sm truncate">
+                          {conversation.name}
+                        </h3>
+                        <span className="text-xs text-muted-foreground">
+                          {conversation.timestamp}
+                        </span>
+                      </div>
+                      
+                      <p className="text-sm text-muted-foreground truncate mt-1">
+                        {conversation.lastMessage}
                       </p>
+                      
+                      {conversation.type === "group" && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {conversation.participants} participants
+                        </p>
+                      )}
+                    </div>
+                    
+                    {conversation.unread > 0 && (
+                      <Badge className="bg-primary text-primary-foreground">
+                        {conversation.unread}
+                      </Badge>
                     )}
                   </div>
-                  
-                  {conversation.unread > 0 && (
-                    <Badge className="bg-primary text-primary-foreground">
-                      {conversation.unread}
-                    </Badge>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Groupes populaires */}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         )}
-        
+
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-gradient-gold">
             Groupes populaires
           </h3>
           
           <div className="grid gap-3">
-            {[
-              {
-                name: "🇫🇷 Supporters France",
-                members: "2.3K membres",
-                avatar: "https://images.unsplash.com/photo-1551038442-8e68eae1c3b9?w=100&h=100&fit=crop"
-              },
-              {
-                name: "⚽ Débat Football",
-                members: "1.8K membres", 
-                avatar: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=100&h=100&fit=crop"
-              }
-            ].map((group, index) => (
+            {(groups.length > 0 ? groups : [
+              { id: 'demo-1', name: "🇫🇷 Supporters France", members: "2.3K membres", avatar: "https://images.unsplash.com/photo-1551038442-8e68eae1c3b9?w=100&h=100&fit=crop" },
+              { id: 'demo-2', name: "⚽ Débat Football", members: "1.8K membres", avatar: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=100&h=100&fit=crop" }
+            ]).map((group, index) => (
               <Card key={index} className="card-golden">
                 <CardContent className="p-3">
                   <div className="flex items-center gap-3">
@@ -490,23 +625,12 @@ export default function Chat() {
                       <h4 className="font-medium text-sm">{group.name}</h4>
                       <p className="text-xs text-muted-foreground">{group.members}</p>
                     </div>
-                    <Button size="sm" variant="outline" className="btn-golden-outline" onClick={() => {
-                      const newConversation = {
-                        id: `group-${Date.now()}`,
-                        type: "group" as const,
-                        name: group.name,
-                        avatar: group.avatar,
-                        lastMessage: "Vous avez rejoint le groupe",
-                        timestamp: "maintenant",
-                        unread: 0,
-                        participants: parseInt(group.members.split(" ")[0].replace(".", "")) + 1
-                      };
-                      setConversations([newConversation, ...conversations]);
-                      toast({
-                        title: `👥 ${group.name}`,
-                        description: "Vous avez rejoint le groupe avec succès !"
-                      });
-                    }}>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="btn-golden-outline"
+                      onClick={() => joinGroup(group.id, group.name)}
+                    >
                       Rejoindre
                     </Button>
                   </div>
@@ -516,7 +640,6 @@ export default function Chat() {
           </div>
         </div>
       </main>
-      )}
 
       {/* Modales */}
       <NewChatModal
@@ -540,18 +663,11 @@ export default function Chat() {
         isOpen={showMediaModal}
         onClose={() => setShowMediaModal(false)}
         onUpload={(file, type) => {
-          const newMessage = {
-            id: Date.now().toString(),
-            senderId: "me",
-            content: `${type === 'image' ? '📸' : '🎥'} ${type === 'image' ? 'Image' : 'Vidéo'} partagée`,
-            timestamp: new Date().toLocaleTimeString("fr-FR", { 
-              hour: "2-digit", 
-              minute: "2-digit" 
-            }),
-            status: "sent" as const,
-            type
-          };
-          setMessages([...messages, newMessage]);
+          // Handle media upload to current chat
+          if (selectedChat && user) {
+            const mediaUrl = URL.createObjectURL(file);
+            sendMessage(`${type === 'image' ? '📸' : '🎥'} ${type === 'image' ? 'Image' : 'Vidéo'} partagée`);
+          }
         }}
       />
       

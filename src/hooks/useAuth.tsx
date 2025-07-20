@@ -37,13 +37,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   
   const { toast } = useToast();
 
-  // Initialisation de l'authentification
+  // Enhanced authentication initialization
   useEffect(() => {
     let mounted = true;
 
     const initialize = async () => {
       if (!supabase) {
-        // Mode localStorage
+        // Mock mode for development
         const mockUser = localStorage.getItem('mockUser');
         if (mounted) {
           setState({
@@ -56,16 +56,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const { data: { user }, error } = await supabase.auth.getUser();
+        // Get current session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.warn('Session error:', sessionError);
+        }
+        
+        const user = session?.user || null;
         
         if (mounted) {
           setState({
-            user: error ? null : user,
+            user,
             loading: false,
-            error: error?.message || null
+            error: sessionError?.message || null
           });
+          
+          // Create or update profile if user exists
+          if (user) {
+            await ensureProfile(user);
+          }
         }
       } catch (error: any) {
+        console.error('Auth initialization error:', error);
         if (mounted) {
           setState({
             user: null,
@@ -78,10 +91,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     initialize();
 
-    // Écouter les changements d'authentification
-    const { data: { subscription } } = supabase?.auth.onAuthStateChange(
+    // Listen for auth changes with enhanced handling
+    const authSubscription = supabase?.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event);
+        console.log('Auth state changed:', event, session?.user?.email);
         
         if (mounted) {
           setState(prev => ({
@@ -90,21 +103,85 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             loading: false,
             error: null
           }));
+          
+          // Handle profile creation/update on sign in
+          if (event === 'SIGNED_IN' && session?.user) {
+            await ensureProfile(session.user);
+          }
+          
+          // Update last seen on auth changes
+          if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+            updateLastSeen(session.user.id);
+          }
         }
       }
-    ) || { data: { subscription: { unsubscribe: () => {} } } };
+    );
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      authSubscription?.data?.subscription?.unsubscribe();
     };
   }, []);
+
+  // Ensure user profile exists
+  const ensureProfile = async (user: User) => {
+    if (!supabase) return;
+    
+    try {
+      // Check if profile exists
+      const { data: existingProfile, error: fetchError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .single();
+      
+      if (!existingProfile && !fetchError) {
+        // Create profile if it doesn't exist
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert([{
+            id: user.id,
+            name: user.user_metadata?.name || user.email?.split('@')[0] || 'Utilisateur',
+            email: user.email,
+            username: user.email?.split('@')[0],
+            bio: '',
+            avatar: user.user_metadata?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
+            followers: 0,
+            following: 0,
+            is_admin: false,
+            stats: { votes: 0, posts: 0, likes: 0, comments: 0 }
+          }]);
+        
+        if (insertError) {
+          console.error('Error creating profile:', insertError);
+        } else {
+          console.log('✅ Profile created for user:', user.email);
+        }
+      }
+    } catch (error) {
+      console.error('Error ensuring profile:', error);
+    }
+  };
+  
+  // Update user last seen
+  const updateLastSeen = async (userId: string) => {
+    if (!supabase) return;
+    
+    try {
+      await supabase
+        .from('profiles')
+        .update({ last_seen: new Date().toISOString() })
+        .eq('id', userId);
+    } catch (error) {
+      console.error('Error updating last seen:', error);
+    }
+  };
 
   const signIn = async (email: string, password: string) => {
     setState(prev => ({ ...prev, loading: true, error: null }));
 
     if (!supabase) {
-      // Mode localStorage
+      // Mock mode for development
       const mockUser = {
         id: `mock-${Date.now()}`,
         email,
@@ -129,6 +206,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (error) {
+        console.error('Sign in error:', error);
         setState(prev => ({ ...prev, loading: false, error: error.message }));
         return { success: false, error: error.message };
       }
@@ -146,6 +224,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return { success: true };
     } catch (error: any) {
+      console.error('Unexpected sign in error:', error);
       setState(prev => ({ ...prev, loading: false, error: error.message }));
       return { success: false, error: error.message };
     }
@@ -155,7 +234,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState(prev => ({ ...prev, loading: true, error: null }));
 
     if (!supabase) {
-      // Mode localStorage
+      // Mock mode for development
       const mockUser = {
         id: `mock-${Date.now()}`,
         email,
@@ -183,6 +262,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (error) {
+        console.error('Sign up error:', error);
         setState(prev => ({ ...prev, loading: false, error: error.message }));
         return { success: false, error: error.message };
       }
@@ -195,11 +275,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       toast({
         title: "Inscription réussie",
-        description: "Votre compte a été créé avec succès !"
+        description: data.user ? "Votre compte a été créé !" : "Vérifiez votre email pour confirmer votre compte"
       });
 
       return { success: true };
     } catch (error: any) {
+      console.error('Unexpected sign up error:', error);
       setState(prev => ({ ...prev, loading: false, error: error.message }));
       return { success: false, error: error.message };
     }
@@ -215,7 +296,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      
       setState({ user: null, loading: false, error: null });
       
       toast({
@@ -223,6 +306,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         description: "À bientôt !"
       });
     } catch (error: any) {
+      console.error('Sign out error:', error);
       setState(prev => ({ ...prev, loading: false, error: error.message }));
     }
   };

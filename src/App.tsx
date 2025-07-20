@@ -8,6 +8,7 @@ import { FeatureFlagsProvider } from "@/contexts/FeatureFlagsContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { LoadingSpinner } from "@/components/common/LoadingSpinner";
 import { SplashScreen } from "@/components/ui/splash-screen";
+import { testSupabaseConnection } from "@/lib/supabase";
 import { useState, useEffect } from "react";
 
 // Lazy loading des pages pour optimiser les performances
@@ -39,22 +40,40 @@ const queryClient = new QueryClient({
 function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [appReady, setAppReady] = useState(false);
+  const [supabaseConnected, setSupabaseConnected] = useState<boolean | null>(null);
 
   useEffect(() => {
-    // Simuler le chargement initial de l'app
-    const timer = setTimeout(() => {
-      setAppReady(true);
-    }, 2000);
+    // Test Supabase connection and initialize app
+    const initializeApp = async () => {
+      try {
+        const connected = await testSupabaseConnection();
+        setSupabaseConnected(connected);
+        console.log(connected ? '✅ Supabase connecté' : '⚠️ Mode localStorage activé');
+      } catch (error) {
+        console.warn('Erreur de connexion Supabase:', error);
+        setSupabaseConnected(false);
+      } finally {
+        // Simulate loading time for better UX
+        setTimeout(() => {
+          setAppReady(true);
+        }, 1500);
+      }
+    };
 
-    return () => clearTimeout(timer);
+    initializeApp();
   }, []);
 
   const handleSplashFinish = () => {
     setShowSplash(false);
   };
 
-  if (showSplash && !appReady) {
-    return <SplashScreen onFinish={handleSplashFinish} />;
+  if (showSplash || !appReady) {
+    return (
+      <SplashScreen 
+        onFinish={handleSplashFinish} 
+        supabaseStatus={supabaseConnected}
+      />
+    );
   }
 
   return (
