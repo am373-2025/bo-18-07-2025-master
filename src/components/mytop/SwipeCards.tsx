@@ -1,93 +1,213 @@
-import React, { useState, useMemo } from "react";
-import TinderCard from "react-tinder-card";
-import PlayerCard from "@/components/mytop/PlayerCard";
+import React, { useState, useRef } from "react";
+import { Player } from "@/types/types";
+import { Badge } from "@/components/ui/badge";
+import { Trophy, MapPin, Users, Star, TrendingUp, TrendingDown } from "lucide-react";
 
-const mockPlayers = [
-  { id: "1", name: "Kylian Mbappé", photo: "/player-mbappe.jpg", club: "PSG", country: "France" },
-  { id: "2", name: "Erling Haaland", photo: "/player-haaland.jpg", club: "Man City", country: "Norvège" },
-  { id: "3", name: "Jude Bellingham", photo: "/player-bellingham.jpg", club: "Real Madrid", country: "Angleterre" },
-  { id: "4", name: "Vinicius Jr", photo: "https://randomuser.me/api/portraits/men/32.jpg", club: "Real Madrid", country: "Brésil" },
-  { id: "5", name: "Kevin De Bruyne", photo: "https://randomuser.me/api/portraits/men/33.jpg", club: "Man City", country: "Belgique" },
-];
+interface SwipeCardsProps {
+  players: Player[];
+  onLike: (player: Player) => void;
+  onDislike: () => void;
+  likedIds: string[];
+  isAnimating?: boolean;
+  swipeDirection?: 'left' | 'right' | null;
+}
 
-const swipeLabels = {
-  right: { text: "LIKE", color: "bg-green-500/80 text-white" },
-  left: { text: "NOPE", color: "bg-red-500/80 text-white" },
-};
+function SwipeCards({ players, onLike, onDislike, likedIds, isAnimating, swipeDirection }: SwipeCardsProps) {
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [startPos, setStartPos] = useState({ x: 0, y: 0 });
+  const cardRef = useRef<HTMLDivElement>(null);
 
-function SwipeCards({ players, onLike, onDislike, likedIds }) {
-  const [currentIndex, setCurrentIndex] = useState(players.length - 1);
-  const [swipeDir, setSwipeDir] = useState(null);
-  const [swiping, setSwiping] = useState(false);
+  const player = players[0];
+  if (!player) return null;
 
-  const childRefs = useMemo(() => Array(players.length).fill(0).map(() => React.createRef<any>()), [players.length]);
-
-  const swiped = (direction, playerId, idx) => {
-    setSwipeDir(direction);
-    setSwiping(true);
-    setTimeout(() => {
-      setSwiping(false);
-      setSwipeDir(null);
-      setCurrentIndex(idx - 1);
-    }, 350);
-    if (direction === "right") onLike(players.find(p => p.id === playerId));
-    if (direction === "left") onDislike(playerId);
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    setStartPos({ x: e.clientX, y: e.clientY });
   };
 
-  const outOfFrame = (name) => {};
-
-  // Fonction pour ignorer le joueur actuel (bouton ❌)
-  const handleIgnore = () => {
-    setCurrentIndex(prev => prev - 1);
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    const deltaX = e.clientX - startPos.x;
+    const deltaY = e.clientY - startPos.y;
+    setDragOffset({ x: deltaX, y: deltaY });
   };
 
-  // Fonction pour liker le joueur actuel (bouton ❤️)
-  const handleLike = () => {
-    if (currentIndex < 0) return;
-    onLike(players[currentIndex]);
-    setCurrentIndex(prev => prev - 1);
-  };
-
-  // Si on atteint la fin, recommencer depuis le début (boucle)
-  React.useEffect(() => {
-    if (currentIndex < 0 && players.length > 0) {
-      setCurrentIndex(players.length - 1);
+  const handleMouseUp = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    
+    if (Math.abs(dragOffset.x) > 100) {
+      if (dragOffset.x > 0) {
+        onLike(player);
+      } else {
+        onDislike();
+      }
     }
-  }, [currentIndex, players.length]);
+    
+    setDragOffset({ x: 0, y: 0 });
+  };
 
-  const currentPlayer = players[currentIndex];
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    setIsDragging(true);
+    setStartPos({ x: touch.clientX, y: touch.clientY });
+  };
 
-  if (!currentPlayer) return null;
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging) return;
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - startPos.x;
+    const deltaY = touch.clientY - startPos.y;
+    setDragOffset({ x: deltaX, y: deltaY });
+  };
+
+  const handleTouchEnd = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    
+    if (Math.abs(dragOffset.x) > 80) {
+      if (dragOffset.x > 0) {
+        onLike(player);
+      } else {
+        onDislike();
+      }
+    }
+    
+    setDragOffset({ x: 0, y: 0 });
+  };
+
+  const rotation = dragOffset.x * 0.1;
+  const opacity = 1 - Math.abs(dragOffset.x) * 0.002;
+
+  const getTrendIcon = (trend?: string) => {
+    if (!trend) return null;
+    if (trend.includes('+')) return <TrendingUp className="w-4 h-4 text-green-500" />;
+    if (trend.includes('-')) return <TrendingDown className="w-4 h-4 text-red-500" />;
+    return null;
+  };
 
   return (
-    <div className="relative flex flex-col items-center gap-6 w-full min-h-[420px]">
-      {/* Centrage vertical/horizontal de la card avec swipe */}
-      <div className="flex flex-col items-center justify-center min-h-[60vh] w-full mb-4">
-        <TinderCard
-          key={currentPlayer.id}
-          onSwipe={dir => {
-            if (dir === 'right') handleLike();
-            if (dir === 'left') handleIgnore();
-          }}
-          preventSwipe={['up', 'down']}
-        >
-          <PlayerCard player={currentPlayer} liked={likedIds.includes(currentPlayer.id)} />
-        </TinderCard>
+    <div className="relative w-full max-w-sm mx-auto">
+      {/* Card principale style Tinder */}
+      <div
+        ref={cardRef}
+        className={`relative w-full aspect-[3/4] cursor-pointer select-none ${
+          isAnimating ? 'transition-transform duration-300' : ''
+        }`}
+        style={{
+          transform: isAnimating 
+            ? `translateX(${swipeDirection === 'right' ? '100%' : swipeDirection === 'left' ? '-100%' : '0'}) rotate(${swipeDirection === 'right' ? '15deg' : swipeDirection === 'left' ? '-15deg' : '0deg'})`
+            : `translateX(${dragOffset.x}px) translateY(${dragOffset.y}px) rotate(${rotation}deg)`,
+          opacity: isAnimating ? 0 : opacity,
+        }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Labels de swipe */}
+        {dragOffset.x > 50 && (
+          <div className="absolute top-8 right-8 z-20 bg-green-500 text-white px-4 py-2 rounded-full font-bold text-lg rotate-12 shadow-2xl animate-pulse">
+            LIKE ❤️
+          </div>
+        )}
+        {dragOffset.x < -50 && (
+          <div className="absolute top-8 left-8 z-20 bg-red-500 text-white px-4 py-2 rounded-full font-bold text-lg -rotate-12 shadow-2xl animate-pulse">
+            NOPE ✕
+          </div>
+        )}
+
+        {/* Card content */}
+        <div className="w-full h-full bg-white rounded-3xl shadow-2xl overflow-hidden border-4 border-white/20">
+          {/* Photo du joueur */}
+          <div className="relative h-3/4 overflow-hidden">
+            <img 
+              src={player.photo} 
+              alt={player.name}
+              className="w-full h-full object-cover"
+              draggable={false}
+            />
+            
+            {/* Gradient overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+            
+            {/* Ranking badge */}
+            {player.ranking && (
+              <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-md rounded-full px-3 py-1">
+                <div className="flex items-center gap-1">
+                  <Trophy className="w-4 h-4 text-primary" />
+                  <span className="text-white font-bold text-sm">#{player.ranking}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Trend indicator */}
+            {player.trend && (
+              <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md rounded-full p-2">
+                {getTrendIcon(player.trend)}
+              </div>
+            )}
+
+            {/* Votes */}
+            <div className="absolute bottom-4 right-4 bg-black/60 backdrop-blur-md rounded-full px-3 py-1">
+              <div className="flex items-center gap-1">
+                <Star className="w-4 h-4 text-primary" />
+                <span className="text-white font-bold text-sm">{(player.votes || 0).toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Informations du joueur */}
+          <div className="h-1/4 p-6 bg-gradient-to-br from-white to-gray-50">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <h3 className="text-2xl font-bold text-gray-900 mb-1">
+                  {player.name}
+                </h3>
+                
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge className="bg-primary/10 text-primary border-primary/20">
+                    {player.position}
+                  </Badge>
+                  {player.age && (
+                    <Badge variant="outline" className="text-xs">
+                      {player.age} ans
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-4 text-sm text-gray-600">
+                  <div className="flex items-center gap-1">
+                    <Users className="w-4 h-4" />
+                    <span className="font-medium">{player.club}</span>
+                  </div>
+                  {player.country && (
+                    <div className="flex items-center gap-1">
+                      <MapPin className="w-4 h-4" />
+                      <span>{player.country}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <div className="flex gap-8 mt-0">
-        <button
-          className="btn-outline rounded-full w-16 h-16 text-3xl shadow-lg bg-white/60 hover:bg-red-100 transition-all duration-200"
-          onClick={handleIgnore}
-          aria-label="Dislike"
-        >❌</button>
-        <button
-          className="btn-golden rounded-full w-16 h-16 text-3xl shadow-lg bg-white/60 hover:bg-pink-100 transition-all duration-200"
-          onClick={handleLike}
-          aria-label="Like"
-        >❤️</button>
+
+      {/* Indicators pour swipe */}
+      <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 flex gap-2">
+        <div className="w-2 h-2 rounded-full bg-white/30" />
+        <div className="w-2 h-2 rounded-full bg-white/30" />
+        <div className="w-2 h-2 rounded-full bg-primary" />
+        <div className="w-2 h-2 rounded-full bg-white/30" />
+        <div className="w-2 h-2 rounded-full bg-white/30" />
       </div>
     </div>
   );
 }
 
-export default SwipeCards; 
+export default SwipeCards;

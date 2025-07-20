@@ -1,103 +1,109 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import SwipeCards from "@/components/mytop/SwipeCards";
-import CreateTopModal from "@/components/mytop/CreateTopModal";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
 import CreateTop3Modal from "@/components/mytop/CreateTop3Modal";
-import PopularTops from "@/components/mytop/PopularTopsModal";
+import PopularTopsModal from "@/components/mytop/PopularTopsModal";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useSupabaseTable } from "@/hooks/useSupabaseTable";
 import { Player, SharedTop } from '@/types/types';
-import rankingData from "@/pages/Ranking";
-import { fetchPlayerByName } from "@/lib/utils";
-import { favoritePlayersNames } from "@/utils/ballonDorPlayers";
-// Type SharedTop local (à centraliser ensuite)
-// Type SharedTop local (à centraliser ensuite)
-
-const playerNames = favoritePlayersNames;
+import { Trophy, Heart, Sparkles, Users, TrendingUp, Flame } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 function MyTop() {
-  const [likedPlayers, setLikedPlayers] = useState<Player[]>([]); // [{id, name, photo}]
+  const [likedPlayers, setLikedPlayers] = useState<Player[]>([]);
   const [mySharedTops, setMySharedTops] = useState<SharedTop[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showPopularModal, setShowPopularModal] = useState(false);
-  const [allPlayers, setAllPlayers] = useState<Player[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
+  const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const { toast } = useToast();
 
-  React.useEffect(() => {
-    setLoading(true);
-    setError(null);
-    Promise.all(playerNames.map(name => fetchPlayerByName(name)
-      .then(data => data.response?.[0] || null)
-      .catch(() => null)
-    ))
-      .then(apiPlayers => {
-        const fallbackPlayers = [
-          {
-            id: "1",
-            name: "Kylian Mbappé",
-            photo: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=100&h=100&fit=crop"
-          },
-          {
-            id: "2",
-            name: "Erling Haaland",
-            photo: "https://images.unsplash.com/photo-1556506751-69a7d6fb64dd?w=100&h=100&fit=crop"
-          },
-          {
-            id: "3",
-            name: "Jude Bellingham",
-            photo: "https://images.unsplash.com/photo-1543326727-cf6c39e8f84c?w=100&h=100&fit=crop"
-          },
-          {
-            id: "4",
-            name: "Pedri González",
-            photo: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=100&h=100&fit=crop"
-          }
-        ];
-        const playersFinal = apiPlayers.map((apiPlayer, i) => {
-          if (apiPlayer) {
-            return {
-              id: apiPlayer.player.id,
-              name: apiPlayer.player.name,
-              photo: apiPlayer.player.photo || fallbackPlayers[i].photo,
-              stats: apiPlayer.statistics?.[0] || {},
-            };
-          } else {
-            return fallbackPlayers[i];
-          }
-        });
-        setAllPlayers(playersFinal);
-      })
-      .catch(() => {
-        setError("Erreur lors du chargement des joueurs depuis l'API.");
-        setAllPlayers([]);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  // Charger les joueurs depuis Supabase
+  const {
+    data: playersData,
+    loading,
+    error
+  } = useSupabaseTable<Player>('players', undefined, 'id, slug, name, position, club, photo, votes, country, age, ranking, trend');
 
-  // Ouvre la modale automatiquement à 3 ou 5 likes (et pas plus)
-  React.useEffect(() => {
-    if (likedPlayers.length === 3 || likedPlayers.length === 5) {
+  // Déclencher les modals automatiquement selon le nombre de likes
+  useEffect(() => {
+    if (likedPlayers.length === 3) {
       setShowCreateModal(true);
-    } else if (likedPlayers.length > 5) {
-      setLikedPlayers(likedPlayers.slice(0, 5)); // Limite à 5
+      toast({
+        title: "🏆 Top 3 prêt !",
+        description: "Créez votre Top 3 personnalisé maintenant",
+      });
+    } else if (likedPlayers.length === 5) {
+      setShowCreateModal(true);
+      toast({
+        title: "🌟 Top 5 exceptionnel !",
+        description: "Votre sélection de 5 joueurs est parfaite",
+      });
     }
-  }, [likedPlayers]);
+  }, [likedPlayers.length, toast]);
 
   const handleLike = (player: Player) => {
-    if (!likedPlayers.find(p => p.id === player.id)) setLikedPlayers([...likedPlayers, player]);
+    if (likedPlayers.length >= 5) {
+      toast({
+        title: "✋ Limite atteinte",
+        description: "Maximum 5 joueurs dans votre top",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!likedPlayers.find(p => p.id === player.id)) {
+      setLikedPlayers(prev => [...prev, player]);
+      setSwipeDirection('right');
+      setIsAnimating(true);
+      
+      setTimeout(() => {
+        setCurrentPlayerIndex(prev => (prev + 1) % playersData.length);
+        setIsAnimating(false);
+        setSwipeDirection(null);
+      }, 300);
+
+      toast({
+        title: `❤️ ${player.name} ajouté !`,
+        description: `${likedPlayers.length + 1}/5 joueurs dans votre top`,
+      });
+    }
   };
-  const handleDislike = () => {};
-  const handleRemoveLike = (id: string) => setLikedPlayers(likedPlayers.filter(p => p.id !== id));
-  const handleReorder = (newOrder: Player[]) => setLikedPlayers(newOrder);
+
+  const handleDislike = () => {
+    setSwipeDirection('left');
+    setIsAnimating(true);
+    
+    setTimeout(() => {
+      setCurrentPlayerIndex(prev => (prev + 1) % playersData.length);
+      setIsAnimating(false);
+      setSwipeDirection(null);
+    }, 300);
+  };
+
+  const handleRemoveLike = (id: string) => {
+    setLikedPlayers(prev => prev.filter(p => p.id !== id));
+    toast({
+      title: "🗑️ Joueur retiré",
+      description: "Joueur supprimé de votre sélection",
+    });
+  };
+
+  const handleReorder = (newOrder: Player[]) => {
+    setLikedPlayers(newOrder);
+  };
+
   const handleValidateTop = (orderedPlayers: Player[]) => {
-    // Créer un nouveau top et l'ajouter à mes tops
     const newTop: SharedTop = {
       id: `mytop-${Date.now()}`,
       userId: "current-user",
       userName: "Vous",
       userAvatar: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=50&h=50&fit=crop",
-      title: "Mon Top 3 personnalisé",
+      title: `Mon Top ${orderedPlayers.length} personnalisé`,
       players: orderedPlayers,
-      topType: "top3",
+      topType: orderedPlayers.length === 3 ? "top3" : "top5",
       likes: 0,
       shares: 0,
       createdAt: new Date(),
@@ -105,51 +111,170 @@ function MyTop() {
       comments: [],
       commentCount: 0
     };
-    setMySharedTops([newTop, ...mySharedTops]);
+    
+    setMySharedTops(prev => [newTop, ...prev]);
     setShowCreateModal(false);
     setShowPopularModal(true);
+    
+    toast({
+      title: "🎉 Top créé avec succès !",
+      description: `Votre Top ${orderedPlayers.length} a été publié`,
+    });
   };
+
   const handleCloseCreate = () => setShowCreateModal(false);
   const handleClosePopular = () => setShowPopularModal(false);
   const handleContinueSwipe = () => setShowCreateModal(false);
 
-  return (
-    <div className={`relative min-h-screen bg-gradient-to-br from-black via-zinc-900 to-neutral-900 flex flex-col items-center p-0 pb-24${showPopularModal ? ' overflow-hidden' : ''}`}>
-      {/* Header sticky moderne */}
-      <header className="sticky top-0 z-30 w-full bg-gradient-to-r from-black/90 to-yellow-900/80 shadow-gold flex items-center justify-center py-4 mb-2 animate-fade-in">
-        <span className="text-3xl mr-2">🏆</span>
-        <h1 className="text-2xl md:text-3xl font-extrabold text-gradient-gold tracking-tight uppercase drop-shadow-gold">Swipe ton Ballon d'Or</h1>
-      </header>
-      {/* Compteur de likes moderne */}
-      <div className="flex items-center gap-2 mb-4 animate-fade-in">
-        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-tr from-yellow-400 to-yellow-600 text-black font-bold shadow-gold text-lg transition-transform duration-300 scale-110 border-2 border-gold">
-          <svg className="w-5 h-5 mr-1 text-gold" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41 0.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-          {likedPlayers.length}
-        </span>
-        <span className="text-xs text-gold font-semibold">/ 5 max</span>
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-neutral-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-white">Chargement des joueurs...</p>
+        </div>
       </div>
-      {/* Zone swipe moderne */}
-      <div className="w-full max-w-md mx-auto flex flex-col items-center animate-slide-up">
-        {loading ? (
-          <div className="flex justify-center items-center py-8">
-            <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-            <span className="ml-4 text-muted-foreground">Chargement des joueurs...</span>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-neutral-900 flex items-center justify-center">
+        <div className="text-center text-red-400">
+          <p>Erreur: {error}</p>
+          <p className="text-sm mt-2">Vérifiez votre connexion</p>
+        </div>
+      </div>
+    );
+  }
+
+  const currentPlayer = playersData[currentPlayerIndex];
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-neutral-900 relative overflow-hidden">
+      {/* Background Effects */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(251,191,36,0.1),transparent_50%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(251,191,36,0.05),transparent_40%)]" />
+      
+      {/* Header moderne style Tinder */}
+      <header className="relative z-10 px-6 pt-12 pb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-r from-primary to-accent rounded-full flex items-center justify-center">
+              <Flame className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-white">Swipe ton Ballon d'Or</h1>
+              <p className="text-sm text-zinc-400">Trouve tes favoris 2025</p>
+            </div>
           </div>
-        ) : error ? (
-          <div className="text-center text-red-500 py-8">{error}</div>
+          
+          {/* Compteur de likes style moderne */}
+          <div className="flex items-center gap-2">
+            <div className="bg-black/40 backdrop-blur-md rounded-full px-4 py-2 border border-white/10">
+              <div className="flex items-center gap-2">
+                <Heart className="w-5 h-5 text-pink-500" />
+                <span className="text-white font-bold">{likedPlayers.length}</span>
+                <span className="text-zinc-400 text-sm">/5</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div className="mt-6 bg-white/10 rounded-full h-2 overflow-hidden">
+          <div 
+            className="h-full bg-gradient-to-r from-pink-500 to-primary transition-all duration-500"
+            style={{ width: `${(likedPlayers.length / 5) * 100}%` }}
+          />
+        </div>
+      </header>
+
+      {/* Zone de swipe moderne */}
+      <div className="flex-1 flex items-center justify-center px-6 py-8">
+        {currentPlayer ? (
+          <SwipeCards
+            players={[currentPlayer]}
+            onLike={handleLike}
+            onDislike={handleDislike}
+            likedIds={likedPlayers.map(p => p.id)}
+            isAnimating={isAnimating}
+            swipeDirection={swipeDirection}
+          />
         ) : (
-          <SwipeCards players={allPlayers.filter(Boolean)} onLike={handleLike} onDislike={handleDislike} likedIds={likedPlayers.map(p => p.id)} />
+          <div className="text-center text-white">
+            <Trophy className="w-16 h-16 mx-auto mb-4 text-primary" />
+            <p className="text-xl font-bold mb-2">Tous les joueurs vus !</p>
+            <p className="text-zinc-400">Créez votre top ou recommencez</p>
+          </div>
         )}
       </div>
-      {/* Bouton flottant moderne */}
-      <button
-        className="fixed bottom-24 right-6 z-40 bg-gradient-to-tr from-yellow-400 to-yellow-600 text-black rounded-full shadow-gold px-6 py-3 flex items-center gap-2 font-bold text-lg border-2 border-gold hover:scale-105 active:scale-95 transition-all duration-200 animate-fade-in hover:bg-yellow-500/90"
-        onClick={() => setShowPopularModal(true)}
-      >
-        <svg className="w-6 h-6 text-gold" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M23 6v2a10 10 0 01-10 10H5.41l-3.7 3.71A1 1 0 012 20.59V18A10 10 0 0112 8h2"/></svg>
-        Tops populaires
-      </button>
-      {/* Modales et autres composants */}
+
+      {/* Actions bar style Tinder */}
+      <div className="fixed bottom-24 left-0 right-0 z-20">
+        <div className="flex items-center justify-center gap-6 px-6">
+          {/* Bouton Dislike */}
+          <Button
+            size="lg"
+            className="w-16 h-16 rounded-full bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 shadow-2xl border-4 border-white/20"
+            onClick={handleDislike}
+          >
+            <span className="text-2xl">✕</span>
+          </Button>
+
+          {/* Bouton Tops populaires */}
+          <Button
+            size="lg"
+            variant="outline"
+            className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-md border-white/20 hover:bg-white/20"
+            onClick={() => setShowPopularModal(true)}
+          >
+            <TrendingUp className="w-6 h-6 text-white" />
+          </Button>
+
+          {/* Bouton Super Like */}
+          <Button
+            size="lg"
+            className="w-12 h-16 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 shadow-2xl border-4 border-white/20"
+            onClick={() => handleLike(currentPlayer)}
+          >
+            <span className="text-xl">⭐</span>
+          </Button>
+
+          {/* Bouton Like */}
+          <Button
+            size="lg"
+            className="w-16 h-16 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 shadow-2xl border-4 border-white/20"
+            onClick={() => handleLike(currentPlayer)}
+          >
+            <Heart className="w-8 h-8 text-white" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Liked players preview */}
+      {likedPlayers.length > 0 && (
+        <div className="fixed top-24 right-6 z-10">
+          <div className="bg-black/60 backdrop-blur-md rounded-2xl p-3 border border-white/10">
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="w-4 h-4 text-primary" />
+              <span className="text-white text-sm font-medium">Vos favoris</span>
+            </div>
+            <div className="flex gap-1">
+              {likedPlayers.map((player, index) => (
+                <div key={player.id} className="w-8 h-8 rounded-full overflow-hidden border-2 border-primary/50">
+                  <img src={player.photo} alt={player.name} className="w-full h-full object-cover" />
+                </div>
+              ))}
+              {Array.from({ length: 5 - likedPlayers.length }).map((_, i) => (
+                <div key={i} className="w-8 h-8 rounded-full bg-white/10 border-2 border-white/20" />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modales */}
       <CreateTop3Modal
         isOpen={showCreateModal}
         onClose={handleCloseCreate}
@@ -159,17 +284,14 @@ function MyTop() {
         onValidate={handleValidateTop}
         onContinueSwipe={handleContinueSwipe}
       />
-      {showPopularModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <PopularTops sharedTops={mySharedTops} onClose={handleClosePopular} />
-        </div>
-      )}
-      {/* Footer flottant moderne (optionnel) */}
-      {/* <footer className="fixed bottom-0 left-0 w-full bg-black/90 backdrop-blur shadow-inner py-3 flex justify-center items-center z-20 animate-fade-in">
-        <span className="text-sm text-gold">© 2025 Ballon d'Or Social</span>
-      </footer> */}
+
+      <PopularTopsModal
+        isOpen={showPopularModal}
+        onClose={handleClosePopular}
+        sharedTops={mySharedTops}
+      />
     </div>
   );
 }
 
-export default MyTop; 
+export default MyTop;

@@ -1,168 +1,86 @@
 import React, { useState } from "react";
-import { Heart, Share2, MessageCircle, Trophy, Crown, TrendingUp } from "lucide-react";
-import CommentSection from "./CommentSection";
-import { Player, SharedTop, Comment } from '@/types/types';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Heart, Share2, MessageCircle, Trophy, Crown, TrendingUp, Filter, X, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { SharedTop } from '@/types/types';
+
+interface PopularTopsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  sharedTops: SharedTop[];
+}
 
 // Données mockées pour les tops populaires
 const MOCK_POPULAR_TOPS: SharedTop[] = [
   {
     id: "1",
     userId: "user1",
-    userName: "FootFan2024",
+    userName: "FootballFan2024",
     userAvatar: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=50&h=50&fit=crop",
-    title: "Les meilleurs de 2024",
+    title: "Mon Top 3 absolu 2025",
     players: [
-      { id: "1", name: "Kylian Mbappé", photo: "/src/assets/player-mbappe.jpg", likes: 1250 },
-      { id: "2", name: "Erling Haaland", photo: "/src/assets/player-haaland.jpg", likes: 980 },
-      { id: "3", name: "Jude Bellingham", photo: "/src/assets/player-bellingham.jpg", likes: 890 },
+      { id: "1", name: "Kylian Mbappé", photo: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=100&h=100&fit=crop" },
+      { id: "2", name: "Erling Haaland", photo: "https://images.unsplash.com/photo-1556506751-69a7d6fb64dd?w=100&h=100&fit=crop" },
+      { id: "3", name: "Jude Bellingham", photo: "https://images.unsplash.com/photo-1543326727-cf6c39e8f84c?w=100&h=100&fit=crop" },
     ],
     topType: "top3",
     likes: 342,
     shares: 89,
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2h ago
+    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
     isLiked: false,
-    comments: [
-      {
-        id: "c1",
-        userId: "user2",
-        userName: "SoccerLover",
-        userAvatar: "https://images.unsplash.com/photo-1556506751-69a7d6fb64dd?w=50&h=50&fit=crop",
-        content: "Excellent top ! Mbappé mérite vraiment la première place cette année.",
-        likes: 12,
-        isLiked: false,
-        createdAt: new Date(Date.now() - 30 * 60 * 1000), // 30min ago
-        replies: [
-          {
-            id: "r1",
-            userId: "user1",
-            userName: "FootFan2024",
-            userAvatar: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=50&h=50&fit=crop",
-            content: "Merci ! Il a vraiment été exceptionnel cette saison.",
-            likes: 5,
-            isLiked: true,
-            createdAt: new Date(Date.now() - 15 * 60 * 1000), // 15min ago
-          }
-        ]
-      },
-      {
-        id: "c2",
-        userId: "user3",
-        userName: "BallonDor",
-        userAvatar: "https://images.unsplash.com/photo-1543326727-cf6c39e8f84c?w=50&h=50&fit=crop",
-        content: "Haaland en 2ème place ? Il mérite mieux selon moi !",
-        likes: 8,
-        isLiked: false,
-        createdAt: new Date(Date.now() - 45 * 60 * 1000), // 45min ago
-      }
-    ],
-    commentCount: 2
+    comments: [],
+    commentCount: 15
   },
   {
     id: "2",
     userId: "user2",
-    userName: "BallonDor",
+    userName: "BallonDorExpert",
     userAvatar: "https://images.unsplash.com/photo-1556506751-69a7d6fb64dd?w=50&h=50&fit=crop",
-    title: "Mon Top 5 absolu",
+    title: "Les 5 légendes actuelles",
     players: [
-      { id: "7", name: "Lionel Messi", photo: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=100&h=100&fit=crop", likes: 2100 },
-      { id: "8", name: "Cristiano Ronaldo", photo: "https://images.unsplash.com/photo-1556506751-69a7d6fb64dd?w=100&h=100&fit=crop", likes: 1950 },
-      { id: "1", name: "Kylian Mbappé", photo: "/src/assets/player-mbappe.jpg", likes: 1250 },
-      { id: "2", name: "Erling Haaland", photo: "/src/assets/player-haaland.jpg", likes: 980 },
-      { id: "3", name: "Jude Bellingham", photo: "/src/assets/player-bellingham.jpg", likes: 890 },
+      { id: "7", name: "Lionel Messi", photo: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=100&h=100&fit=crop" },
+      { id: "8", name: "Cristiano Ronaldo", photo: "https://images.unsplash.com/photo-1556506751-69a7d6fb64dd?w=100&h=100&fit=crop" },
+      { id: "1", name: "Kylian Mbappé", photo: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=100&h=100&fit=crop" },
+      { id: "2", name: "Erling Haaland", photo: "https://images.unsplash.com/photo-1556506751-69a7d6fb64dd?w=100&h=100&fit=crop" },
+      { id: "3", name: "Jude Bellingham", photo: "https://images.unsplash.com/photo-1543326727-cf6c39e8f84c?w=100&h=100&fit=crop" },
     ],
     topType: "top5",
     likes: 567,
     shares: 234,
-    createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000), // 5h ago
+    createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000),
     isLiked: true,
-    comments: [
-      {
-        id: "c3",
-        userId: "user4",
-        userName: "MessiFan",
-        userAvatar: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=50&h=50&fit=crop",
-        content: "Messi en première place, c'est évident ! 🐐",
-        likes: 25,
-        isLiked: true,
-        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2h ago
-      }
-    ],
-    commentCount: 1
+    comments: [],
+    commentCount: 28
   },
   {
     id: "3",
-    userId: "user3",
-    userName: "SoccerExpert",
-    userAvatar: "https://images.unsplash.com/photo-1543326727-cf6c39e8f84c?w=50&h=50&fit=crop",
-    title: "Top 10 des légendes",
-    players: [
-      { id: "7", name: "Lionel Messi", photo: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=100&h=100&fit=crop", likes: 2100 },
-      { id: "8", name: "Cristiano Ronaldo", photo: "https://images.unsplash.com/photo-1556506751-69a7d6fb64dd?w=100&h=100&fit=crop", likes: 1950 },
-      { id: "1", name: "Kylian Mbappé", photo: "/src/assets/player-mbappe.jpg", likes: 1250 },
-      { id: "2", name: "Erling Haaland", photo: "/src/assets/player-haaland.jpg", likes: 980 },
-      { id: "3", name: "Jude Bellingham", photo: "/src/assets/player-bellingham.jpg", likes: 890 },
-      { id: "4", name: "Vinicius Jr", photo: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=100&h=100&fit=crop", likes: 750 },
-      { id: "5", name: "Kevin De Bruyne", photo: "https://images.unsplash.com/photo-1556506751-69a7d6fb64dd?w=100&h=100&fit=crop", likes: 720 },
-      { id: "6", name: "Mohamed Salah", photo: "https://images.unsplash.com/photo-1543326727-cf6c39e8f84c?w=100&h=100&fit=crop", likes: 680 },
-      { id: "9", name: "Neymar Jr", photo: "https://images.unsplash.com/photo-1543326727-cf6c39e8f84c?w=100&h=100&fit=crop", likes: 850 },
-      { id: "10", name: "Robert Lewandowski", photo: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=100&h=100&fit=crop", likes: 620 },
-    ],
-    topType: "top10",
-    likes: 892,
-    shares: 445,
-    createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
-    isLiked: false,
-    comments: [],
-    commentCount: 0
-  },
-  {
-    id: "4",
     userId: "current-user",
     userName: "Vous",
     userAvatar: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=50&h=50&fit=crop",
-    title: "Mon Top 5 personnel",
+    title: "Mon sélection perso",
     players: [
-      { id: "1", name: "Kylian Mbappé", photo: "/src/assets/player-mbappe.jpg", likes: 1250 },
-      { id: "2", name: "Erling Haaland", photo: "/src/assets/player-haaland.jpg", likes: 980 },
-      { id: "3", name: "Jude Bellingham", photo: "/src/assets/player-bellingham.jpg", likes: 890 },
-      { id: "4", name: "Vinicius Jr", photo: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=100&h=100&fit=crop", likes: 750 },
-      { id: "5", name: "Kevin De Bruyne", photo: "https://images.unsplash.com/photo-1556506751-69a7d6fb64dd?w=100&h=100&fit=crop", likes: 720 },
+      { id: "1", name: "Kylian Mbappé", photo: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=100&h=100&fit=crop" },
+      { id: "2", name: "Erling Haaland", photo: "https://images.unsplash.com/photo-1556506751-69a7d6fb64dd?w=100&h=100&fit=crop" },
+      { id: "3", name: "Jude Bellingham", photo: "https://images.unsplash.com/photo-1543326727-cf6c39e8f84c?w=100&h=100&fit=crop" },
     ],
-    topType: "top5",
+    topType: "top3",
     likes: 15,
     shares: 3,
-    createdAt: new Date(Date.now() - 30 * 60 * 1000), // 30min ago
+    createdAt: new Date(Date.now() - 30 * 60 * 1000),
     isLiked: false,
-    comments: [
-      {
-        id: "c4",
-        userId: "user5",
-        userName: "FanClub",
-        userAvatar: "https://images.unsplash.com/photo-1556506751-69a7d6fb64dd?w=50&h=50&fit=crop",
-        content: "Super top ! J'aime beaucoup tes choix.",
-        likes: 2,
-        isLiked: false,
-        createdAt: new Date(Date.now() - 10 * 60 * 1000), // 10min ago
-      }
-    ],
-    commentCount: 1
+    comments: [],
+    commentCount: 2
   }
 ];
 
-type Props = {
-  onLike?: (topId: string) => void;
-  onShare?: (top: SharedTop) => void;
-  onAddSharedTop?: (top: SharedTop) => void;
-  sharedTops?: SharedTop[];
-  onClose?: () => void;
-};
-
-export default function PopularTops({ onLike, onShare, onAddSharedTop, sharedTops = [], onClose }: Props) {
-  const [tops, setTops] = useState<SharedTop[]>(MOCK_POPULAR_TOPS);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'top3' | 'top5' | 'top10' | 'my-tops'>('all');
-  const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
-
-
+export default function PopularTopsModal({ isOpen, onClose, sharedTops = [] }: PopularTopsModalProps) {
+  const [tops, setTops] = useState<SharedTop[]>([...sharedTops, ...MOCK_POPULAR_TOPS]);
+  const [activeFilter, setActiveFilter] = useState<'trending' | 'recent' | 'my-tops'>('trending');
+  const [searchQuery, setSearchQuery] = useState("");
 
   const handleLike = (topId: string) => {
     setTops(prev => prev.map(top => 
@@ -170,123 +88,23 @@ export default function PopularTops({ onLike, onShare, onAddSharedTop, sharedTop
         ? { ...top, likes: top.isLiked ? top.likes - 1 : top.likes + 1, isLiked: !top.isLiked }
         : top
     ));
-    onLike?.(topId);
   };
 
   const handleShare = (top: SharedTop) => {
     setTops(prev => prev.map(t => 
       t.id === top.id ? { ...t, shares: t.shares + 1 } : t
     ));
-    onShare?.(top);
   };
 
-  const handleAddComment = (topId: string, content: string) => {
-    const newComment: Comment = {
-      id: `comment-${Date.now()}`,
-      userId: "current-user",
-      userName: "Vous",
-      userAvatar: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=50&h=50&fit=crop",
-      content,
-      likes: 0,
-      isLiked: false,
-      createdAt: new Date()
-    };
-
-    setTops(prev => prev.map(top => 
-      top.id === topId 
-        ? { 
-            ...top, 
-            comments: [newComment, ...top.comments],
-            commentCount: top.commentCount + 1
-          }
-        : top
-    ));
-  };
-
-  const handleLikeComment = (topId: string, commentId: string) => {
-    setTops(prev => prev.map(top => {
-      if (top.id !== topId) return top;
-      
-      const updateCommentLikes = (comments: Comment[]): Comment[] => {
-        return comments.map(comment => {
-          if (comment.id === commentId) {
-            return {
-              ...comment,
-              likes: comment.isLiked ? comment.likes - 1 : comment.likes + 1,
-              isLiked: !comment.isLiked
-            };
-          }
-          if (comment.replies) {
-            return {
-              ...comment,
-              replies: updateCommentLikes(comment.replies)
-            };
-          }
-          return comment;
-        });
-      };
-
-      return {
-        ...top,
-        comments: updateCommentLikes(top.comments)
-      };
-    }));
-  };
-
-  const handleReplyToComment = (topId: string, commentId: string, content: string) => {
-    const newReply: Comment = {
-      id: `reply-${Date.now()}`,
-      userId: "current-user",
-      userName: "Vous",
-      userAvatar: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=50&h=50&fit=crop",
-      content,
-      likes: 0,
-      isLiked: false,
-      createdAt: new Date()
-    };
-
-    setTops(prev => prev.map(top => {
-      if (top.id !== topId) return top;
-      
-      const addReplyToComment = (comments: Comment[]): Comment[] => {
-        return comments.map(comment => {
-          if (comment.id === commentId) {
-            return {
-              ...comment,
-              replies: [...(comment.replies || []), newReply]
-            };
-          }
-          return comment;
-        });
-      };
-
-      return {
-        ...top,
-        comments: addReplyToComment(top.comments),
-        commentCount: top.commentCount + 1
-      };
-    }));
-  };
-
-  const toggleCommentsExpanded = (topId: string) => {
-    setExpandedComments(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(topId)) {
-        newSet.delete(topId);
-      } else {
-        newSet.add(topId);
-      }
-      return newSet;
-    });
-  };
-
-  // Combiner les tops mockés avec les tops partagés
-  const allTops = [...sharedTops, ...tops];
-  
-  const filteredTops = allTops.filter(top => {
-    if (activeFilter === 'all') return true;
+  const filteredTops = tops.filter(top => {
+    const matchesSearch = top.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         top.userName.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    if (!matchesSearch) return false;
+    
     if (activeFilter === 'my-tops') return top.userId === 'current-user';
-    return top.topType === activeFilter;
+    if (activeFilter === 'recent') return true; // Tri par date plus tard
+    return true; // trending = tous par défaut
   });
 
   const formatTimeAgo = (date: Date) => {
@@ -295,265 +113,236 @@ export default function PopularTops({ onLike, onShare, onAddSharedTop, sharedTop
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const days = Math.floor(hours / 24);
 
-    if (days > 0) return `il y a ${days}j`;
-    if (hours > 0) return `il y a ${hours}h`;
-    return "à l'instant";
+    if (days > 0) return `${days}j`;
+    if (hours > 0) return `${hours}h`;
+    return "maintenant";
   };
 
-  const getTopTypeIcon = (type: string) => {
+  const getTopTypeEmoji = (type: string) => {
     switch (type) {
       case 'top3': return '🥉';
       case 'top5': return '🏆';
-      case 'top10': return '👑';
       default: return '🏅';
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center min-h-screen">
-      <div className="relative w-full max-w-lg mx-auto bg-gradient-to-br from-zinc-900 via-black to-neutral-900 rounded-2xl shadow-gold p-4 md:p-8 overflow-y-auto max-h-[90vh] flex flex-col pt-12">
-        {/* Bouton de fermeture */}
-        <button
-          className="absolute top-3 right-3 text-gold hover:text-yellow-400 text-2xl font-bold z-50 bg-black/80 rounded-full px-3 py-1"
-          onClick={onClose}
-          aria-label="Fermer"
-        >✕</button>
-        <div className="space-y-4">
-          {/* Header avec filtres */}
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-md mx-auto h-[90vh] p-0 gap-0 bg-background border-border">
+        <DialogHeader className="p-6 pb-4 border-b border-border/50">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-orange-400" />
-              <h3 className="text-white font-semibold">Tops populaires</h3>
-            </div>
-            
-            <div className="flex gap-1">
-              <button
-                onClick={() => setActiveFilter('all')}
-                className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                  activeFilter === 'all' 
-                    ? 'bg-blue-500 text-white' 
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                }`}
-              >
-                Tous
-              </button>
-              <button
-                onClick={() => setActiveFilter('my-tops')}
-                className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                  activeFilter === 'my-tops' 
-                    ? 'bg-green-500 text-white' 
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                }`}
-              >
-                Mes tops
-              </button>
-              <button
-                onClick={() => setActiveFilter('top3')}
-                className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                  activeFilter === 'top3' 
-                    ? 'bg-blue-500 text-white' 
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                }`}
-              >
-                Top 3
-              </button>
-              <button
-                onClick={() => setActiveFilter('top5')}
-                className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                  activeFilter === 'top5' 
-                    ? 'bg-blue-500 text-white' 
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                }`}
-              >
-                Top 5
-              </button>
-            </div>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+              <TrendingUp className="w-6 h-6 text-primary" />
+              Tops Populaires
+            </DialogTitle>
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              <X className="w-5 h-5" />
+            </Button>
           </div>
+          
+          {/* Search bar moderne */}
+          <div className="relative mt-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input 
+              placeholder="Rechercher un top..." 
+              className="pl-10 bg-muted/50 border-border/50"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </DialogHeader>
 
-          {/* Liste des tops */}
-          <div className="space-y-3">
-            {filteredTops.map((top) => (
-              <div key={top.id} className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
-                {/* Header du top */}
+        {/* Filters modernes */}
+        <div className="px-6 py-4 border-b border-border/50">
+          <Tabs value={activeFilter} onValueChange={(value) => setActiveFilter(value as any)}>
+            <TabsList className="grid w-full grid-cols-3 bg-muted/50">
+              <TabsTrigger value="trending" className="flex items-center gap-2 text-xs">
+                <TrendingUp className="w-4 h-4" />
+                Tendances
+              </TabsTrigger>
+              <TabsTrigger value="recent" className="flex items-center gap-2 text-xs">
+                <Crown className="w-4 h-4" />
+                Récents
+              </TabsTrigger>
+              <TabsTrigger value="my-tops" className="flex items-center gap-2 text-xs">
+                <Trophy className="w-4 h-4" />
+                Mes tops
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+
+        {/* Liste des tops avec scroll */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          {filteredTops.map((top) => (
+            <div key={top.id} className="bg-card/50 backdrop-blur-sm rounded-2xl border border-border/50 overflow-hidden">
+              {/* Header du top */}
+              <div className="p-4 pb-2">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <img
-                      src={top.userAvatar}
-                      alt={top.userName}
-                      className="w-8 h-8 rounded-full object-cover"
-                    />
+                    <Avatar className="w-10 h-10 ring-2 ring-primary/20">
+                      <AvatarImage src={top.userAvatar} alt={top.userName} />
+                      <AvatarFallback>{top.userName[0]}</AvatarFallback>
+                    </Avatar>
                     <div>
-                      <p className="text-white font-medium text-sm">{top.userName}</p>
-                      <p className="text-slate-400 text-xs">{formatTimeAgo(top.createdAt)}</p>
+                      <p className="font-semibold text-sm">{top.userName}</p>
+                      <p className="text-xs text-muted-foreground">{formatTimeAgo(top.createdAt)}</p>
                     </div>
                   </div>
                   
                   <div className="flex items-center gap-2">
-                    <span className="text-2xl">{getTopTypeIcon(top.topType)}</span>
-                    <span className="text-slate-400 text-xs uppercase">{top.topType}</span>
+                    <Badge variant="outline" className="text-xs">
+                      {getTopTypeEmoji(top.topType)} {top.topType.toUpperCase()}
+                    </Badge>
                   </div>
                 </div>
 
-                {/* Titre */}
-                <h4 className="text-white font-semibold mb-3">{top.title}</h4>
+                <h4 className="font-bold text-base mb-3">{top.title}</h4>
+              </div>
 
-                {/* Joueurs - Podium Style */}
-                <div className="mb-3">
-                  {top.topType === 'top3' ? (
-                    // Podium layout for top 3
-                    <div className="flex items-end justify-center gap-2">
-                      {/* 2nd place */}
-                      <div className="flex flex-col items-center">
-                        <div className="relative mb-2">
-                          <img
-                            src={top.players[1]?.photo}
-                            alt={top.players[1]?.name}
-                            className="w-14 h-14 rounded-full object-cover border-2"
-                            style={{ borderColor: '#C0C0C0' }}
-                          />
-                          <div className="absolute -top-1 -right-1 w-6 h-6 bg-black/80 rounded-full flex items-center justify-center">
-                            <span className="text-white text-xs font-bold">🥈</span>
-                          </div>
-                        </div>
-                        <div className="bg-slate-700 rounded-lg px-3 py-2 min-w-[80px] text-center">
-                          <p className="text-white text-xs font-medium truncate">
-                            {top.players[1]?.name}
-                          </p>
-                          <p className="text-slate-400 text-xs">2ème</p>
+              {/* Joueurs - Design moderne */}
+              <div className="px-4 pb-3">
+                {top.topType === 'top3' ? (
+                  // Podium style pour top 3
+                  <div className="flex items-end justify-center gap-2">
+                    {/* 2ème place */}
+                    <div className="flex flex-col items-center">
+                      <div className="relative mb-2">
+                        <Avatar className="w-12 h-12 ring-2 ring-gray-400">
+                          <AvatarImage src={top.players[1]?.photo} alt={top.players[1]?.name} />
+                          <AvatarFallback>2</AvatarFallback>
+                        </Avatar>
+                        <div className="absolute -top-1 -right-1 w-5 h-5 bg-gray-400 rounded-full flex items-center justify-center">
+                          <span className="text-white text-xs font-bold">2</span>
                         </div>
                       </div>
-
-                      {/* 1st place */}
-                      <div className="flex flex-col items-center">
-                        <div className="relative mb-2">
-                          <img
-                            src={top.players[0]?.photo}
-                            alt={top.players[0]?.name}
-                            className="w-16 h-16 rounded-full object-cover border-2"
-                            style={{ borderColor: '#FFD700' }}
-                          />
-                          <div className="absolute -top-1 -right-1 w-6 h-6 bg-black/80 rounded-full flex items-center justify-center">
-                            <span className="text-white text-xs font-bold">🥇</span>
-                          </div>
-                        </div>
-                        <div className="bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-lg px-3 py-2 min-w-[80px] text-center">
-                          <p className="text-white text-xs font-medium truncate">
-                            {top.players[0]?.name}
-                          </p>
-                          <p className="text-yellow-100 text-xs">1er</p>
-                        </div>
-                      </div>
-
-                      {/* 3rd place */}
-                      <div className="flex flex-col items-center">
-                        <div className="relative mb-2">
-                          <img
-                            src={top.players[2]?.photo}
-                            alt={top.players[2]?.name}
-                            className="w-14 h-14 rounded-full object-cover border-2"
-                            style={{ borderColor: '#CD7F32' }}
-                          />
-                          <div className="absolute -top-1 -right-1 w-6 h-6 bg-black/80 rounded-full flex items-center justify-center">
-                            <span className="text-white text-xs font-bold">🥉</span>
-                          </div>
-                        </div>
-                        <div className="bg-slate-700 rounded-lg px-3 py-2 min-w-[80px] text-center">
-                          <p className="text-white text-xs font-medium truncate">
-                            {top.players[2]?.name}
-                          </p>
-                          <p className="text-slate-400 text-xs">3ème</p>
-                        </div>
+                      <div className="bg-muted/50 rounded-lg px-2 py-1 min-w-[60px]">
+                        <p className="text-xs font-medium text-center truncate">
+                          {top.players[1]?.name?.split(' ').pop()}
+                        </p>
                       </div>
                     </div>
-                  ) : (
-                    // Horizontal layout for top 5 and top 10
-                    <div className="flex gap-2 overflow-x-auto pb-2">
-                      {top.players.map((player, index) => (
-                        <div key={player.id} className="relative flex-shrink-0">
-                          <div className="relative">
-                            <img
-                              src={player.photo}
-                              alt={player.name}
-                              className="w-12 h-12 rounded-full object-cover border-2"
-                              style={{
-                                borderColor: index === 0 ? '#FFD700' : 
-                                           index === 1 ? '#C0C0C0' : 
-                                           index === 2 ? '#CD7F32' : '#4B5563'
-                              }}
-                            />
-                            
-                            {/* Rank Badge */}
-                            <div className="absolute -top-1 -right-1 w-5 h-5 bg-black/80 rounded-full flex items-center justify-center">
-                              <span className="text-white text-xs font-bold">
-                                {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`}
-                              </span>
-                            </div>
-                          </div>
-                          <p className="text-white text-xs text-center mt-1 truncate w-12">
-                            {player.name}
-                          </p>
+
+                    {/* 1ère place */}
+                    <div className="flex flex-col items-center">
+                      <div className="relative mb-2">
+                        <Avatar className="w-16 h-16 ring-4 ring-primary">
+                          <AvatarImage src={top.players[0]?.photo} alt={top.players[0]?.name} />
+                          <AvatarFallback>1</AvatarFallback>
+                        </Avatar>
+                        <div className="absolute -top-1 -right-1 w-6 h-6 bg-primary rounded-full flex items-center justify-center">
+                          <Crown className="w-4 h-4 text-white" />
                         </div>
-                      ))}
+                      </div>
+                      <div className="bg-primary/20 rounded-lg px-2 py-1 min-w-[60px] border border-primary/30">
+                        <p className="text-xs font-bold text-center truncate text-primary">
+                          {top.players[0]?.name?.split(' ').pop()}
+                        </p>
+                      </div>
                     </div>
-                  )}
-                </div>
 
-                {/* Actions */}
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => handleLike(top.id)}
-                    className={`flex items-center gap-1 text-sm transition-colors px-3 py-1 rounded-lg cursor-pointer ${
-                      top.isLiked 
-                        ? 'text-red-400 bg-red-400/10' 
-                        : 'text-slate-400 hover:text-red-400 hover:bg-slate-700/50'
-                    }`}
-                  >
-                    <Heart className={`w-4 h-4 ${top.isLiked ? 'fill-current' : ''}`} />
-                    <span>{top.likes}</span>
-                  </button>
-                  
-                  <button
-                    onClick={() => handleShare(top)}
-                    className="flex items-center gap-1 text-slate-400 hover:text-blue-400 text-sm transition-colors px-3 py-1 rounded-lg hover:bg-slate-700/50 active:bg-slate-600/50 cursor-pointer"
-                  >
-                    <Share2 className="w-4 h-4" />
-                    <span>{top.shares}</span>
-                  </button>
-
-                  <button
-                    onClick={() => toggleCommentsExpanded(top.id)}
-                    className="flex items-center gap-1 text-slate-400 hover:text-green-400 text-sm transition-colors px-3 py-1 rounded-lg hover:bg-slate-700/50 active:bg-slate-600/50 cursor-pointer"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    <span>{top.commentCount}</span>
-                  </button>
-                </div>
-
-                {/* Section Commentaires */}
-                {expandedComments.has(top.id) && (
-                  <div className="mt-4 pt-4 border-t border-slate-700">
-                    <CommentSection
-                      topId={top.id}
-                      comments={top.comments}
-                      onComment={(content) => handleAddComment(top.id, content)}
-                      onLike={(commentId) => handleLikeComment(top.id, commentId)}
-                      onReply={(commentId, content) => handleReplyToComment(top.id, commentId, content)}
-                    />
+                    {/* 3ème place */}
+                    <div className="flex flex-col items-center">
+                      <div className="relative mb-2">
+                        <Avatar className="w-12 h-12 ring-2 ring-amber-600">
+                          <AvatarImage src={top.players[2]?.photo} alt={top.players[2]?.name} />
+                          <AvatarFallback>3</AvatarFallback>
+                        </Avatar>
+                        <div className="absolute -top-1 -right-1 w-5 h-5 bg-amber-600 rounded-full flex items-center justify-center">
+                          <span className="text-white text-xs font-bold">3</span>
+                        </div>
+                      </div>
+                      <div className="bg-muted/50 rounded-lg px-2 py-1 min-w-[60px]">
+                        <p className="text-xs font-medium text-center truncate">
+                          {top.players[2]?.name?.split(' ').pop()}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  // Layout horizontal pour top 5
+                  <div className="flex gap-2 overflow-x-auto pb-2">
+                    {top.players.map((player, index) => (
+                      <div key={player.id} className="flex-shrink-0 flex flex-col items-center">
+                        <div className="relative">
+                          <Avatar className={`w-10 h-10 ring-2 ${
+                            index === 0 ? 'ring-primary' : 
+                            index === 1 ? 'ring-gray-400' : 
+                            index === 2 ? 'ring-amber-600' : 'ring-muted'
+                          }`}>
+                            <AvatarImage src={player.photo} alt={player.name} />
+                            <AvatarFallback>{index + 1}</AvatarFallback>
+                          </Avatar>
+                          <div className="absolute -top-1 -right-1 w-4 h-4 bg-background border border-border rounded-full flex items-center justify-center">
+                            <span className="text-xs font-bold">{index + 1}</span>
+                          </div>
+                        </div>
+                        <p className="text-xs font-medium text-center mt-1 truncate w-12">
+                          {player.name?.split(' ').pop()}
+                        </p>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
-            ))}
-          </div>
+
+              {/* Actions modernes */}
+              <div className="flex items-center justify-between p-4 pt-2 border-t border-border/50">
+                <div className="flex items-center gap-4">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleLike(top.id)}
+                    className={`flex items-center gap-2 hover:bg-red-500/10 ${
+                      top.isLiked ? 'text-red-500' : 'text-muted-foreground'
+                    }`}
+                  >
+                    <Heart className={`w-4 h-4 ${top.isLiked ? 'fill-current' : ''}`} />
+                    <span className="text-xs font-medium">{top.likes}</span>
+                  </Button>
+                  
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="flex items-center gap-2 text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    <span className="text-xs font-medium">{top.commentCount}</span>
+                  </Button>
+                </div>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleShare(top)}
+                  className="flex items-center gap-2 text-muted-foreground hover:text-green-500 hover:bg-green-500/10"
+                >
+                  <Share2 className="w-4 h-4" />
+                  <span className="text-xs font-medium">{top.shares}</span>
+                </Button>
+              </div>
+            </div>
+          ))}
 
           {filteredTops.length === 0 && (
-            <div className="text-center py-8">
-              <Trophy className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-              <p className="text-slate-400">Aucun top trouvé</p>
-              <p className="text-slate-500 text-sm mt-1">Soyez le premier à partager votre top !</p>
+            <div className="text-center py-12">
+              <Trophy className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
+              <p className="text-muted-foreground text-lg font-medium">Aucun top trouvé</p>
+              <p className="text-muted-foreground/70 text-sm mt-1">
+                {searchQuery ? "Essayez d'autres mots-clés" : "Soyez le premier à partager votre top !"}
+              </p>
             </div>
           )}
         </div>
-      </div>
-    </div>
+
+        {/* Footer avec stats */}
+        <div className="px-6 py-4 border-t border-border/50 bg-muted/20">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>{filteredTops.length} tops trouvés</span>
+            <span>Ballon d'Or 2025</span>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
-} 
+}
